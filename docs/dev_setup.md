@@ -12,13 +12,12 @@
 docker compose -f compose.dev.yml up -d
 ```
 
-This starts:
+This starts **Postgres** on port `3135` (mapped from container port `5432`).
 
-- **Postgres** on port `3135` (mapped from container port `5432`)
-- **Pocket ID** (OIDC provider) on port `1411`
-
-Pocket ID needs a one-time setup before the API can authenticate against it —
-see [`dev_pocket_id_setup.md`](./dev_pocket_id_setup.md).
+Authentication is [Toamaisutaa](https://github.com/PianoNic/Toamaisutaa)'s local
+username/password login by default — no separate identity provider container is
+required. OIDC bearer validation is still available and config-driven (`Oidc:Authority`
+etc., see `appsettings.json`) if a real identity provider is wired up later.
 
 ## Configure secrets
 
@@ -31,16 +30,16 @@ cd src/LuckyMaze.API
 
 dotnet user-secrets set "ConnectionStrings:LuckyMazeDatabase" "Host=localhost;Port=3135;Database=luckymaze-dev;Username=postgres;Password=d4vpas8w0rd13!!!"
 
-dotnet user-secrets set "Oidc:Authority" "http://localhost:1411"
-dotnet user-secrets set "Oidc:RequireHttpsMetadata" "false"
-dotnet user-secrets set "Oidc:ClientId" "<client-id-from-pocket-id>"
-dotnet user-secrets set "Oidc:RedirectUri" "http://localhost:5173/callback"
-dotnet user-secrets set "Oidc:PostLogoutRedirectUri" "http://localhost:5173"
-dotnet user-secrets set "Oidc:Scope" "openid profile email groups"
+dotnet user-secrets set "LocalLogin:SigningKey" "<base64, at least 32 bytes>"
 ```
 
-The `Oidc:ClientId` is obtained during the Pocket ID setup — see step 7 of
-[`dev_pocket_id_setup.md`](./dev_pocket_id_setup.md).
+`LocalLogin:SigningKey` signs the access tokens issued by `/auth/login` and
+`/auth/register`, and Toamaisutaa refuses to start local login without one. Generate a
+dev key with:
+
+```bash
+openssl rand -base64 32
+```
 
 To verify:
 
@@ -59,16 +58,16 @@ Paste in:
   "ConnectionStrings": {
     "LuckyMazeDatabase": "Host=localhost;Port=3135;Database=luckymaze-dev;Username=postgres;Password=d4vpas8w0rd13!!!"
   },
-  "Oidc": {
-    "Authority": "http://localhost:1411",
-    "RequireHttpsMetadata": false,
-    "ClientId": "<client-id-from-pocket-id>",
-    "RedirectUri": "http://localhost:5173/callback",
-    "PostLogoutRedirectUri": "http://localhost:5173",
-    "Scope": "openid profile email groups picture"
+  "LocalLogin": {
+    "SigningKey": "<base64, at least 32 bytes>"
   }
 }
 ```
+
+Self-registration is on by default (`LocalLogin:AllowSelfRegistration` in
+`appsettings.json`) — `POST /auth/register` creates an account and signs it in.
+See [Toamaisutaa's password-login docs](https://docs.toamaisutaa.pianonic.ch/password-login)
+for the full endpoint list.
 
 ## Run the API
 

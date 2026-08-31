@@ -1,8 +1,8 @@
-import { Injectable } from '@angular/core';
-import { OidcSecurityService } from 'angular-auth-oidc-client';
+import { Injectable, inject } from '@angular/core';
 import { HubConnection, HubConnectionBuilder, HubConnectionState } from '@microsoft/signalr';
-import { Subject, Observable, firstValueFrom } from 'rxjs';
+import { Subject, Observable } from 'rxjs';
 import { environment } from '../environments/environment';
+import { AuthService } from '../auth/auth.service';
 
 @Injectable({
   providedIn: 'root'
@@ -25,7 +25,7 @@ export class GameSignalRService {
   public gameFinished$ = this.gameFinishedSubject.asObservable();
   public connectionStatus$ = this.connectionStatusSubject.asObservable();
 
-  constructor(private oidcSecurityService: OidcSecurityService) {}
+  private readonly authService = inject(AuthService);
 
   public async startConnection(): Promise<void> {
     if (this.hubConnection && this.hubConnection.state !== HubConnectionState.Disconnected) {
@@ -35,12 +35,9 @@ export class GameSignalRService {
     this.connectionStatusSubject.next('Connecting');
 
     try {
-      // Get the JWT token from the OIDC service
-      const token = await firstValueFrom(this.oidcSecurityService.getAccessToken());
-
       this.hubConnection = new HubConnectionBuilder()
         .withUrl(`${environment.apiBaseUrl}/hubs/game`, {
-          accessTokenFactory: () => Promise.resolve(token)
+          accessTokenFactory: () => this.authService.getAccessToken() ?? '',
         })
         .withAutomaticReconnect()
         .build();

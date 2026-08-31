@@ -10,24 +10,6 @@ services:
       - "3135:5432"
     volumes:
       - postgres-data-dev:/var/lib/postgresql
-      - ./scripts/init-pocket-id-db.sql:/docker-entrypoint-initdb.d/init-pocket-id-db.sql:ro
-
-  pocket-id:
-    image: ghcr.io/pocket-id/pocket-id:v2
-    container_name: luckymaze-pocket-id-dev
-    restart: unless-stopped
-    depends_on:
-      - dev-db
-    environment:
-      APP_URL: http://localhost:1411
-      TRUST_PROXY: "false"
-      DB_CONNECTION_STRING: postgres://postgres:d4vpas8w0rd13!!!@dev-db:5432/pocket-id
-      ENCRYPTION_KEY: very-secure-key-123
-    ports:
-      - "1411:1411"
-    volumes:
-      - pocket-id-data-dev:/app/data
 
 volumes:
   postgres-data-dev:
-  pocket-id-data-dev:

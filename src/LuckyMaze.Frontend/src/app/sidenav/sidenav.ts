@@ -1,7 +1,5 @@
-import { ChangeDetectionStrategy, Component, computed, DestroyRef, inject, OnInit } from '@angular/core';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { RouterLink } from '@angular/router';
-import { OidcSecurityService } from 'angular-auth-oidc-client';
+import { ChangeDetectionStrategy, Component, computed, inject, OnInit } from '@angular/core';
+import { Router, RouterLink } from '@angular/router';
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import {
   lucideHouse,
@@ -20,6 +18,7 @@ import { HlmSidebarImports, HlmSidebarService } from '@spartan-ng/helm/sidebar';
 import { HlmDropdownMenuImports } from '@spartan-ng/helm/dropdown-menu';
 import { HlmAvatarImports } from '@spartan-ng/helm/avatar';
 import { UserStore } from '../shared/stores/UserStore.store';
+import { AuthService } from '../shared/auth/auth.service';
 
 @Component({
   selector: 'luckymaze-sidenav',
@@ -43,8 +42,8 @@ import { UserStore } from '../shared/stores/UserStore.store';
 })
 export class Sidenav implements OnInit {
   private readonly sidebarService = inject(HlmSidebarService);
-  private readonly oidcSecurityService = inject(OidcSecurityService);
-  private readonly destroyRef = inject(DestroyRef);
+  private readonly authService = inject(AuthService);
+  private readonly router = inject(Router);
   private readonly theme = inject(ThemeService);
   protected readonly userStore = inject(UserStore);
 
@@ -77,10 +76,8 @@ export class Sidenav implements OnInit {
     this.theme.set(mode);
   }
 
-  protected logout(): void {
-    this.oidcSecurityService
-      .logoffAndRevokeTokens()
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe();
+  protected async logout(): Promise<void> {
+    await this.authService.logout();
+    await this.router.navigateByUrl('/login');
   }
 }

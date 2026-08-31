@@ -1,10 +1,16 @@
 using Microsoft.EntityFrameworkCore;
+using Toamaisutaa.Abstractions;
 using LuckyMaze.Domain;
-using LuckyMaze.Domain.Enums;
 
 namespace LuckyMaze.Infrastructure.Services
 {
-    public class UserService(IOidcService oidcService, LuckyMazeDbContext dbContext) : IUserService
+    /// <summary>
+    /// Bridges Toamaisutaa's local user row (identity: who signed in) to LuckyMaze's own
+    /// <see cref="User"/> row (game state: balance, role, ready flag). The two are linked by
+    /// <see cref="User.ExternalId"/>, which stores the Toamaisutaa user id as a string - the same
+    /// field that used to hold the Pocket ID OIDC subject.
+    /// </summary>
+    public class UserService(ICurrentUser currentUser, LuckyMazeDbContext dbContext) : IUserService
     {
         public async Task<bool> ExistsAsync(string externalId, CancellationToken cancellationToken = default)
         {
@@ -13,11 +19,10 @@ namespace LuckyMaze.Infrastructure.Services
 
         public async Task<Guid> GetCurrentUserIdAsync(CancellationToken cancellationToken = default)
         {
-            var oidcUser = await oidcService.GetCurrentUserAsync(cancellationToken)
-                ?? throw new UnauthorizedAccessException("No authenticated user");
+            var toaUser = await currentUser.GetOrProvisionAsync(cancellationToken);
 
             var user = await dbContext.Users
-                .SingleOrDefaultAsync(u => u.ExternalId == oidcUser.ExternalId, cancellationToken)
+                .SingleOrDefaultAsync(u => u.ExternalId == toaUser.Id.ToString(), cancellationToken)
                 ?? throw new UnauthorizedAccessException("User not found");
 
             return user.Id;
@@ -25,25 +30,23 @@ namespace LuckyMaze.Infrastructure.Services
 
         public async Task SyncCurrentUserAsync(CancellationToken cancellationToken = default)
         {
-            var oidcUser = await oidcService.GetCurrentUserAsync(cancellationToken)
-                ?? throw new UnauthorizedAccessException("No authenticated user");
+            var toaUser = await currentUser.GetOrProvisionAsync(cancellationToken);
+            var externalId = toaUser.Id.ToString();
 
             var user = await dbContext.Users
-                .SingleOrDefaultAsync(u => u.ExternalId == oidcUser.ExternalId, cancellationToken);
+                .SingleOrDefaultAsync(u => u.ExternalId == externalId, cancellationToken);
 
-            var role = oidcUser.Roles.Contains("admin") ? UserRole.Admin : UserRole.User;
-            var email = oidcUser.Email ?? string.Empty;
-            var displayName = oidcUser.DisplayName ?? "LuckyMaze User";
+            var email = toaUser.Email ?? string.Empty;
+            var displayName = toaUser.DisplayName ?? toaUser.UserName ?? "LuckyMaze User";
 
             if (user is null)
             {
                 user = new User
                 {
-                    ExternalId = oidcUser.ExternalId,
+                    ExternalId = externalId,
                     Email = email,
                     DisplayName = displayName,
-                    AvatarUrl = oidcUser.AvatarUrl,
-                    Role = role,
+                    AvatarUrl = toaUser.PictureUrl,
                     Preferences = new UserPreferences()
                 };
 
@@ -54,8 +57,7 @@ namespace LuckyMaze.Infrastructure.Services
 
             user.Email = email;
             user.DisplayName = displayName;
-            user.AvatarUrl = oidcUser.AvatarUrl;
-            user.Role = role;
+            user.AvatarUrl = toaUser.PictureUrl;
 
             await dbContext.SaveChangesAsync(cancellationToken);
         }
