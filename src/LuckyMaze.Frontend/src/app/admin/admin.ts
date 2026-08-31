@@ -1,5 +1,4 @@
 import { Component, OnInit, inject } from '@angular/core';
-import { CommonModule } from '@angular/common';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { SettingsService, GameSettings, MazeSize } from '../api/api/settings.service';
 import { toast } from '@spartan-ng/brain/sonner';
@@ -13,7 +12,6 @@ import { HlmCardImports } from '@spartan-ng/helm/card';
   selector: 'app-admin',
   standalone: true,
   imports: [
-    CommonModule, 
     ReactiveFormsModule,
     HlmInputImports,
     HlmButtonImports,

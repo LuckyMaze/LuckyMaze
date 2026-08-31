@@ -1,0 +1,77 @@
+<nav
+  class="fixed inset-x-0 bottom-0 z-40 flex items-stretch border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 md:hidden"
+  style="padding-bottom: env(safe-area-inset-bottom)"
+  aria-label="Primary"
+>
+  <a
+    routerLink="/lobby"
+    routerLinkActive="text-foreground"
+    class="flex flex-1 flex-col items-center justify-center gap-1 py-2 text-muted-foreground"
+  >
+    <ng-icon name="lucideGamepad2" size="20" />
+    <span class="text-[11px] font-medium">Play</span>
+  </a>
+
+  <a
+    routerLink="/leaderboard"
+    routerLinkActive="text-foreground"
+    class="flex flex-1 flex-col items-center justify-center gap-1 py-2 text-muted-foreground"
+  >
+    <ng-icon name="lucideTrophy" size="20" />
+    <span class="text-[11px] font-medium">Ranks</span>
+  </a>
+
+  <a
+    routerLink="/history"
+    routerLinkActive="text-foreground"
+    class="flex flex-1 flex-col items-center justify-center gap-1 py-2 text-muted-foreground"
+  >
+    <ng-icon name="lucideHistory" size="20" />
+    <span class="text-[11px] font-medium">History</span>
+  </a>
+
+  @if (isAdmin()) {
+    <a
+      routerLink="/admin"
+      routerLinkActive="text-foreground"
+      class="flex flex-1 flex-col items-center justify-center gap-1 py-2 text-muted-foreground"
+    >
+      <ng-icon name="lucideSettings" size="20" />
+      <span class="text-[11px] font-medium">Admin</span>
+    </a>
+  }
+
+  <button
+    type="button"
+    class="flex flex-1 flex-col items-center justify-center gap-1 py-2 text-muted-foreground"
+    [hlmDropdownMenuTrigger]="accountMenu"
+    side="top"
+    align="center"
+  >
+    <ng-icon name="lucideCircleUser" size="20" />
+    <span class="text-[11px] font-medium">Account</span>
+  </button>
+
+  <ng-template #accountMenu>
+    <hlm-dropdown-menu class="min-w-56">
+      <hlm-dropdown-menu-group>
+        @for (option of themeOptions; track option.mode) {
+          <button hlmDropdownMenuItem (click)="setTheme(option.mode)">
+            <ng-icon [name]="option.icon" />
+            {{ option.label }}
+            @if (themeMode() === option.mode) {
+              <span class="ml-auto text-xs text-muted-foreground">✓</span>
+            }
+          </button>
+        }
+      </hlm-dropdown-menu-group>
+
+      <hlm-dropdown-menu-separator />
+
+      <button hlmDropdownMenuItem (click)="logout()">
+        <ng-icon name="lucideLogOut" />
+        Log out
+      </button>
+    </hlm-dropdown-menu>
+  </ng-template>
+</nav>

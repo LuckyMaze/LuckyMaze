@@ -1,7 +1,15 @@
 import { ChangeDetectionStrategy, Component, OnDestroy, OnInit, computed, inject, signal, effect } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import { NgIcon, provideIcons } from '@ng-icons/core';
-import { lucideCheckCircle, lucideClock, lucideCoins, lucideInfo, lucideAlertTriangle } from '@ng-icons/lucide';
+import {
+  lucideCheckCircle,
+  lucideClock,
+  lucideCoins,
+  lucideInfo,
+  lucideAlertTriangle,
+  lucideGamepad2,
+  lucideTrophy,
+} from '@ng-icons/lucide';
 import { toast } from '@spartan-ng/brain/sonner';
 import { HlmAvatarImports } from '@spartan-ng/helm/avatar';
 import { HlmBadge } from '@spartan-ng/helm/badge';
@@ -28,7 +36,17 @@ const MIN_BET = 10;
     ContentHeader,
     MazeRenderer,
   ],
-  providers: [provideIcons({ lucideCheckCircle, lucideClock, lucideCoins, lucideInfo, lucideAlertTriangle })],
+  providers: [
+    provideIcons({
+      lucideCheckCircle,
+      lucideClock,
+      lucideCoins,
+      lucideInfo,
+      lucideAlertTriangle,
+      lucideGamepad2,
+      lucideTrophy,
+    }),
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './lobby.html',
 })
