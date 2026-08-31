@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using Toamaisutaa.Abstractions;
 using LuckyMaze.Domain;
 
@@ -51,7 +52,19 @@ namespace LuckyMaze.Infrastructure.Services
                 };
 
                 dbContext.Users.Add(user);
-                await dbContext.SaveChangesAsync(cancellationToken);
+
+                try
+                {
+                    await dbContext.SaveChangesAsync(cancellationToken);
+                }
+                catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
+                {
+                    // Lost a race with another concurrent first-sight request for the same subject
+                    // (e.g. the SignalR negotiate and the app's own sync call, right after sign-up).
+                    // The row exists now either way - nothing left for this call to do.
+                    dbContext.Entry(user).State = EntityState.Detached;
+                }
+
                 return;
             }
 

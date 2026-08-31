@@ -102,9 +102,9 @@ export class AuthService {
     this.storeTokens(response);
   }
 
-  async register(userName: string, email: string, password: string): Promise<void> {
+  async register(userName: string, password: string): Promise<void> {
     const response = await firstValueFrom(
-      this.http.post<TokenPair>(`${environment.apiBaseUrl}/auth/register`, { userName, email, password }),
+      this.http.post<TokenPair>(`${environment.apiBaseUrl}/auth/register`, { userName, password }),
     );
 
     this.storeTokens(response);

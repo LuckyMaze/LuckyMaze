@@ -30,7 +30,6 @@ export class RegisterComponent {
 
   protected readonly form = this.fb.nonNullable.group({
     userName: ['', Validators.required],
-    email: ['', [Validators.required, Validators.email]],
     password: ['', [Validators.required, Validators.minLength(8)]],
   });
 
@@ -38,10 +37,10 @@ export class RegisterComponent {
     if (this.form.invalid || this.submitting()) return;
 
     this.submitting.set(true);
-    const { userName, email, password } = this.form.getRawValue();
+    const { userName, password } = this.form.getRawValue();
 
     try {
-      await this.authService.register(userName, email, password);
+      await this.authService.register(userName, password);
       await this.router.navigateByUrl('/');
     } catch (err) {
       toast.error(extractAuthErrorMessage(err, 'Registration failed.'));
