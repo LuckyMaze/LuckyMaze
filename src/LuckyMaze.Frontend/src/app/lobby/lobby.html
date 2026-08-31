@@ -5,26 +5,32 @@
 <div class="relative flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-2 pb-16 md:gap-8 md:p-8">
   @if (gameStore.state() === 'Idle' || gameStore.state() === 'Countdown') {
     <!-- Pre-game lobby -->
-    <div class="mx-auto grid w-full max-w-6xl grid-cols-1 gap-3 sm:grid-cols-3">
-      <div class="flex items-center gap-3 rounded-lg border p-3">
+    <!-- Mobile: one compact line. Desktop: the fuller 3-step explainer below. -->
+    <div class="mx-auto flex w-full max-w-6xl flex-row items-center gap-2 rounded-lg border p-2 text-xs text-muted-foreground sm:hidden">
+      <ng-icon name="lucideInfo" class="shrink-0" />
+      <span>AI solves the maze live - bet an exit, split the pot if you're right.</span>
+    </div>
+
+    <div class="mx-auto hidden w-full max-w-6xl grid-cols-3 gap-3 sm:grid">
+      <div class="flex flex-row items-center gap-2 rounded-lg border p-2">
         <ng-icon name="lucideGamepad2" class="shrink-0 text-muted-foreground" />
-        <span class="text-sm"><span class="font-medium">Get ready.</span> An AI is about to solve this maze live.</span>
+        <span class="text-sm"><span class="font-medium">Get ready.</span> AI solves the maze live.</span>
       </div>
-      <div class="flex items-center gap-3 rounded-lg border p-3">
+      <div class="flex flex-row items-center gap-2 rounded-lg border p-2">
         <ng-icon name="lucideCoins" class="shrink-0 text-muted-foreground" />
-        <span class="text-sm"><span class="font-medium">Bet on an exit.</span> Pick where you think it'll come out.</span>
+        <span class="text-sm"><span class="font-medium">Bet an exit.</span> Guess where it comes out.</span>
       </div>
-      <div class="flex items-center gap-3 rounded-lg border p-3">
+      <div class="flex flex-row items-center gap-2 rounded-lg border p-2">
         <ng-icon name="lucideTrophy" class="shrink-0 text-muted-foreground" />
-        <span class="text-sm"><span class="font-medium">Win together.</span> Right guesses split the losing bets.</span>
+        <span class="text-sm"><span class="font-medium">Win together.</span> Split the losers' pot.</span>
       </div>
     </div>
 
-    <div class="mx-auto grid w-full max-w-6xl grid-cols-1 items-start gap-4 lg:grid-cols-3 lg:gap-8">
-      <section hlmCard class="flex flex-col gap-4 p-4 md:gap-6 md:p-6 lg:col-span-1">
+    <div class="mx-auto grid w-full max-w-6xl grid-cols-1 items-start gap-2 lg:grid-cols-3 lg:gap-8">
+      <section hlmCard class="flex flex-col gap-2 p-3 md:gap-6 md:p-6 lg:col-span-1">
         <h2 class="text-xl font-semibold tracking-tight">Your profile</h2>
 
-        <div class="flex items-center gap-4">
+        <div class="flex flex-row items-center gap-3">
           <hlm-avatar size="lg">
             @if (currentUser()?.avatarUrl) {
               <img [src]="currentUser()?.avatarUrl" [alt]="currentUser()?.displayName" hlmAvatarImage />
@@ -39,7 +45,7 @@
 
         <div class="flex flex-col gap-1">
           <span class="text-sm text-muted-foreground">Available balance</span>
-          <div class="flex items-center gap-2 text-3xl font-bold tabular-nums">
+          <div class="flex flex-row items-center gap-2 text-2xl font-bold tabular-nums sm:text-3xl">
             <ng-icon name="lucideCoins" class="text-muted-foreground" />
             <span>{{ currentInGamePlayer()?.balance ?? currentUser()?.balance ?? 0 | number: '1.2-2' }}</span>
           </div>
@@ -56,13 +62,13 @@
         </button>
       </section>
 
-      <section class="flex flex-col gap-4 md:gap-6 lg:col-span-2">
-        <div class="flex items-center justify-between">
+      <section class="flex flex-col gap-2 md:gap-6 lg:col-span-2">
+        <div class="flex flex-row items-center justify-between">
           <h2 class="text-xl font-semibold tracking-tight">Waiting room</h2>
           <span hlmBadge variant="secondary">{{ gameStore.players().length }} connected</span>
         </div>
 
-        <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div class="grid grid-cols-1 gap-2 md:grid-cols-2 md:gap-4">
           @for (p of gameStore.players(); track p.displayName) {
             <div hlmCard class="flex flex-row items-center justify-between gap-3 p-4">
               <div class="flex min-w-0 items-center gap-3">
@@ -84,9 +90,9 @@
           }
         </div>
 
-        <div hlmCard class="flex flex-row items-center gap-3 p-4 text-sm text-muted-foreground">
+        <div hlmCard class="flex flex-row items-center gap-2 p-2 text-xs text-muted-foreground sm:p-4 sm:text-sm">
           <ng-icon name="lucideInfo" class="shrink-0" />
-          <span>The round starts once at least 2 players are connected and 75% are ready (1 player is enough for testing).</span>
+          <span>Starts once 2+ players are ready (1 is enough while testing).</span>
         </div>
       </section>
     </div>
@@ -135,7 +141,7 @@
 
       <section class="flex h-full flex-col gap-3 lg:col-span-5">
         @if (gameStore.state() === 'Betting') {
-          <div hlmCard class="flex flex-col gap-3 p-3 md:gap-6 md:p-6">
+          <div hlmCard class="flex flex-col gap-2 p-2 md:gap-6 md:p-6">
             <div class="flex flex-row items-center justify-between">
               <h2 class="text-lg font-semibold tracking-tight">Place your bet</h2>
               <div class="flex items-center gap-1 text-xs text-muted-foreground">
@@ -145,11 +151,12 @@
             </div>
 
             <div class="flex flex-col gap-2">
-              <span class="text-sm font-medium text-muted-foreground">Choose an exit</span>
+              <span class="sr-only text-sm font-medium text-muted-foreground sm:not-sr-only">Choose an exit</span>
               <div class="grid grid-cols-2 gap-2">
                 @for (exit of gameStore.activeMaze()?.exits; track exit.name) {
                   <button
                     hlmBtn
+                    size="sm"
                     [variant]="selectedExit() === exit.name ? 'default' : 'outline'"
                     [disabled]="alreadyPlacedBet() !== null"
                     (click)="selectExit(exit.name)"
@@ -161,13 +168,9 @@
             </div>
 
             <div class="flex flex-col gap-2">
-              <div class="flex items-center justify-between text-sm">
-                <span class="font-medium text-muted-foreground">Bet amount</span>
-                <span class="font-mono font-semibold tabular-nums">{{ betAmount() | number }} coins</span>
-              </div>
-
               <div class="flex items-center gap-2">
-                <button hlmBtn variant="outline" size="icon" [disabled]="alreadyPlacedBet() !== null" (click)="adjustBet(-50)">−</button>
+                <span class="shrink-0 text-sm font-medium text-muted-foreground">Amount</span>
+                <button hlmBtn variant="outline" size="sm" class="w-9 shrink-0" [disabled]="alreadyPlacedBet() !== null" (click)="adjustBet(-50)">−</button>
                 <input
                   hlmInput
                   type="number"
@@ -176,7 +179,7 @@
                   [disabled]="alreadyPlacedBet() !== null"
                   (input)="setBetFromInput($any($event.target).value)"
                 />
-                <button hlmBtn variant="outline" size="icon" [disabled]="alreadyPlacedBet() !== null" (click)="adjustBet(50)">+</button>
+                <button hlmBtn variant="outline" size="sm" class="w-9 shrink-0" [disabled]="alreadyPlacedBet() !== null" (click)="adjustBet(50)">+</button>
               </div>
 
               <div class="grid grid-cols-4 gap-2">
@@ -191,7 +194,7 @@
               </div>
             </div>
 
-            <button hlmBtn class="w-full" [disabled]="alreadyPlacedBet() !== null" (click)="submitBet()">
+            <button hlmBtn size="sm" class="w-full" [disabled]="alreadyPlacedBet() !== null" (click)="submitBet()">
               <ng-icon [name]="alreadyPlacedBet() !== null ? 'lucideCheckCircle' : 'lucideCoins'" />
               @if (alreadyPlacedBet(); as bet) {
                 Bet placed ({{ bet.exitName }} · {{ bet.amount }})
@@ -202,12 +205,14 @@
           </div>
         }
 
-        <div hlmCard class="flex min-h-0 flex-1 flex-col gap-2 p-3 md:gap-3 md:p-6">
-          <h3 class="border-b pb-2 font-semibold tracking-tight">Placed bets</h3>
-          <div class="flex min-h-[48px] flex-1 flex-col gap-2 overflow-y-auto">
+        <div hlmCard class="flex min-h-0 flex-1 flex-col gap-2 p-2 md:gap-3 md:p-6">
+          @if (gameStore.bets().length > 0) {
+            <h3 class="border-b pb-2 font-semibold tracking-tight">Placed bets</h3>
+          }
+          <div class="flex min-h-[24px] flex-1 flex-col gap-2 overflow-y-auto">
             @if (gameStore.bets().length === 0) {
-              <div class="flex h-full flex-col items-center justify-center gap-2 py-8 text-xs text-muted-foreground">
-                <ng-icon name="lucideInfo" class="size-6" />
+              <div class="flex flex-row items-center justify-center gap-2 text-xs text-muted-foreground">
+                <ng-icon name="lucideInfo" class="size-4 shrink-0" />
                 <span>No bets placed for this round yet.</span>
               </div>
             } @else {

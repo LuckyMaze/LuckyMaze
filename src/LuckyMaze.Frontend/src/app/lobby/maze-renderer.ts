@@ -15,7 +15,7 @@ import { MazeExit } from '../api/model/mazeExit';
   selector: 'luckymaze-maze-renderer',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="relative mx-auto aspect-square w-full max-w-[280px] overflow-hidden rounded-xl border bg-card sm:max-w-[360px]">
+    <div class="relative mx-auto aspect-square w-full max-w-[150px] overflow-hidden rounded-xl border bg-card sm:max-w-[360px]">
       <canvas #mazeCanvas class="block size-full"></canvas>
     </div>
   `,
