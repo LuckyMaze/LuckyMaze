@@ -19,6 +19,14 @@ namespace LuckyMaze.Infrastructure.Services
     {
         private const int PanelSize = 64;
 
+        // The Pico doesn't reply to MOVE until it finishes animating the dot along its own
+        // BFS path (code.py sleeps MOVE_DELAY = 20ms per pixel step). The very first MOVE after a
+        // GRID load can cover most of the panel - its internal dot defaults to the first walkable
+        // pixel, not the maze's actual start - so this has to be generous, not snappy. Too short a
+        // timeout doesn't just log a warning: the Pico still finishes and writes its response after
+        // we've given up reading it, and that stray line desyncs every reply after it.
+        private static readonly int PicoReadTimeoutMs = (int)TimeSpan.FromSeconds(15).TotalMilliseconds;
+
         private readonly ILogger<MazeHardwareService> _logger;
 
         private readonly string? _picoPortName;
@@ -62,7 +70,7 @@ namespace LuckyMaze.Infrastructure.Services
                 _serialPort = new SerialPort(_picoPortName, 115200, Parity.None, 8, StopBits.One)
                 {
                     NewLine = "\n",
-                    ReadTimeout = 2000,
+                    ReadTimeout = PicoReadTimeoutMs,
                     WriteTimeout = 500,
                 };
                 _serialPort.Open();
