@@ -63,6 +63,18 @@ have homed, it instead sends `SET_KINEMATIC_POSITION X=0 Y=0 Z=0` - telling Klip
 current, hand-parked position **is** the origin, which needs no motion and no sensors. Park the
 carriage there physically before starting a round.
 
+### Aligning the carriage with the panel
+
+The magnet's target position is derived straight from the same LED panel pixel the ball is shown
+at - `Hardware__PixelPitchMm` (3.0 for a Waveshare P3 64x64) is the only thing converting a pixel
+into a physical distance, so the two are always in step with each other regardless of maze size.
+
+What it can't know on its own is exactly where the hand-parked "origin" (see Homing above) sits
+relative to the panel's own top-left corner underneath it - there are no endstops to calibrate
+that automatically. If the ball tracks consistently offset from the magnet by a fixed amount in
+one direction, that's this alignment, not the pixel pitch: nudge `Hardware__OriginOffsetXMm` /
+`Hardware__OriginOffsetYMm` (mm) rather than re-parking the carriage by hand each time.
+
 ### Movement tuning
 
 If the ball moves too fast, too slow, or too jerkily, that's `Hardware__StepFeedRateMmPerMin`
