@@ -34,7 +34,9 @@ namespace LuckyMaze.Infrastructure.Services
 
         private readonly string? _picoPortName;
         private readonly string? _klippySocketPath;
-        private readonly decimal _cellSizeMm;
+        private readonly decimal _pixelPitchMm;
+        private readonly decimal _originOffsetXMm;
+        private readonly decimal _originOffsetYMm;
         private readonly int _stepFeedRate;
         private readonly int _travelFeedRate;
         private readonly int? _accelerationMmPerSec2;
@@ -59,7 +61,16 @@ namespace LuckyMaze.Infrastructure.Services
 
             _picoPortName = configuration["Hardware:PicoPort"];
             _klippySocketPath = configuration["Hardware:KlippySocketPath"];
-            _cellSizeMm = configuration.GetValue<decimal>("Hardware:CellSizeMm", 30.0m);
+            // Waveshare P3 default: 3mm between LED centers. The carriage's target is derived
+            // from this and the panel's own raster pixel coordinates (ToRasterCoords), not an
+            // independent per-maze-cell distance - see PhysicalMm below for why.
+            _pixelPitchMm = configuration.GetValue<decimal>("Hardware:PixelPitchMm", 3.0m);
+            // There are no endstops on this rig (see InitializeAsync), so "origin" is wherever the
+            // carriage was hand-parked before the round started. These nudge that hand-parked zero
+            // to actually line up with the panel's physical top-left corner underneath it - the
+            // only calibration anchor available without endstops.
+            _originOffsetXMm = configuration.GetValue<decimal>("Hardware:OriginOffsetXMm", 0m);
+            _originOffsetYMm = configuration.GetValue<decimal>("Hardware:OriginOffsetYMm", 0m);
             _stepFeedRate = configuration.GetValue<int>("Hardware:StepFeedRateMmPerMin", 2400);
             _travelFeedRate = configuration.GetValue<int>("Hardware:TravelFeedRateMmPerMin", 3000);
             _accelerationMmPerSec2 = configuration.GetValue<int?>("Hardware:AccelerationMmPerSec2");
@@ -233,9 +244,10 @@ namespace LuckyMaze.Infrastructure.Services
             if (_accelerationMmPerSec2 is { } accel)
                 await SendGCodeAsync($"M204 S{accel}");
 
-            // Move the magnetic carriage to the center start cell.
-            decimal startX = (maze.Width / 2) * _cellSizeMm;
-            decimal startY = (maze.Height / 2) * _cellSizeMm;
+            // Move the magnetic carriage to the center start cell - the same raster pixel the LED
+            // dot's very first MOVE will also target, so both land in the same place.
+            var (startRasterX, startRasterY) = ToRasterCoords(maze.Width / 2, maze.Height / 2);
+            var (startX, startY) = PhysicalMm(startRasterX, startRasterY);
             await SendGCodeAsync($"G1 X{startX:F1} Y{startY:F1} F{_travelFeedRate}");
         }
 
@@ -405,6 +417,20 @@ namespace LuckyMaze.Infrastructure.Services
         }
 
         /// <summary>
+        /// Converts a raster pixel coordinate (the same one sent to the Pico's MOVE) to the
+        /// carriage's real-world position in mm. This is the only place panel pixels become
+        /// physical distance - both the LED and the magnet always target the same raster
+        /// coordinate, so the magnet is guaranteed to sit under the pixel showing the ball rather
+        /// than tracking an unrelated, maze-size-dependent distance.
+        /// </summary>
+        private (decimal X, decimal Y) PhysicalMm(int rasterX, int rasterY)
+        {
+            return (
+                _originOffsetXMm + rasterX * _pixelPitchMm,
+                _originOffsetYMm + rasterY * _pixelPitchMm);
+        }
+
+        /// <summary>
         /// The rectangle to mark green for an exit cell - its own interior floor block, extended
         /// by one wall's thickness toward whichever panel edge it opens onto, so the marker
         /// visibly punches through the boundary wall instead of stopping at it. Matches
@@ -433,8 +459,7 @@ namespace LuckyMaze.Infrastructure.Services
             var (px, py) = ToRasterCoords(x, y);
             await SendCommandAsync($"MOVE {px} {py} {_rasterCorridor}");
 
-            decimal posX = x * _cellSizeMm;
-            decimal posY = y * _cellSizeMm;
+            var (posX, posY) = PhysicalMm(px, py);
             await SendGCodeAsync($"G1 X{posX:F1} Y{posY:F1} F{_stepFeedRate}");
         }
 
