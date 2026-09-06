@@ -7,7 +7,6 @@ import { toast } from '@spartan-ng/brain/sonner';
 import { HlmInputImports } from '@spartan-ng/helm/input';
 import { HlmButtonImports } from '@spartan-ng/helm/button';
 import { HlmLabelImports } from '@spartan-ng/helm/label';
-import { HlmNativeSelectImports } from '@spartan-ng/helm/native-select';
 import { HlmCardImports } from '@spartan-ng/helm/card';
 import { HlmSwitchImports } from '@spartan-ng/helm/switch';
 
@@ -19,7 +18,6 @@ import { HlmSwitchImports } from '@spartan-ng/helm/switch';
     HlmInputImports,
     HlmButtonImports,
     HlmLabelImports,
-    HlmNativeSelectImports,
     HlmCardImports,
     HlmSwitchImports
   ],
@@ -30,14 +28,11 @@ export class AdminComponent implements OnInit {
   private fb = inject(FormBuilder);
 
   settingsForm: FormGroup;
-  mazeSizes = [
-    { label: 'Small (16x16)', value: MazeSize.Small16x16 },
-    { label: 'Grid (21x21)', value: MazeSize.Grid21x21 },
-    { label: 'Medium (32x32)', value: MazeSize.Medium32x32 },
-    { label: 'Large (64x64)', value: MazeSize.Large64x64 },
-  ];
 
   constructor() {
+    // Not user-editable (see admin.html) - only Grid21x21 actually renders correctly on the
+    // physical panel (see #39) - but still part of the form so saving other settings round-trips
+    // it instead of resetting to the enum's default value.
     this.settingsForm = this.fb.group({
       mazeSize: [MazeSize.Grid21x21, Validators.required],
       gameSpeedMs: [850, [Validators.required, Validators.min(100), Validators.max(5000)]],

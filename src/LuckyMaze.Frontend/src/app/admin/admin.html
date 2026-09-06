@@ -6,16 +6,6 @@
 
   <form [formGroup]="settingsForm" (ngSubmit)="saveSettings()">
     <div hlmCardContent class="grid grid-cols-1 md:grid-cols-2 gap-6">
-      
-      <div class="space-y-2">
-        <label hlmLabel>Maze Size</label>
-        <select hlmNativeSelect formControlName="mazeSize">
-          @for (size of mazeSizes; track size.value) {
-            <option [ngValue]="size.value" hlmNativeSelectOption>{{ size.label }}</option>
-          }
-        </select>
-        <p class="text-sm text-muted-foreground">Determines the dimensions of the generated maze.</p>
-      </div>
 
       <div class="space-y-2">
         <label hlmLabel>Game Speed (ms)</label>
