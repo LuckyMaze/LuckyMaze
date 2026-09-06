@@ -11,7 +11,10 @@ cp .env.example .env   # set LocalLogin__SigningKey at minimum
 docker compose up -d
 ```
 
-That runs the published `ghcr.io/luckymaze/luckymaze-api` image plus Postgres, with the physical
-hardware side (LED panel, Klipper) in mock mode. For the actual cabinet — LED panel and Klipper
-both on this same Pi — see [`docs/deployment.md`](./docs/deployment.md) for the hardware overlay
-and every other setting.
+That runs the published `ghcr.io/luckymaze/luckymaze-api` image plus Postgres. The image bundles the
+Angular frontend too — same origin, no separate deployment — so the game is live at
+`http://localhost:8080` right away, with the physical hardware side (LED panel, Klipper) in mock
+mode. For the actual cabinet — LED panel and Klipper both on this same Pi — see
+[`docs/deployment.md`](./docs/deployment.md) for the hardware overlay and every other setting, and
+[`docs/captive-portal.md`](./docs/captive-portal.md) to have the cabinet broadcast its own WiFi that
+opens straight into the game.

@@ -2,9 +2,11 @@
 
 The published image (`ghcr.io/luckymaze/luckymaze-api`, built by
 [`.github/workflows/docker-publish.yml`](../.github/workflows/docker-publish.yml) on every merge to
-`main`) is the API only - no frontend, no database, no identity provider. This is the whole real
-deployment: the API, Postgres, and - when the physical rig is attached - the LED panel's Pico and a
-bare-metal Klipper instance, **all on the same Raspberry Pi**.
+`main`) is one image containing both the API and the built Angular frontend - the Dockerfile builds
+the frontend in its own stage and the API serves it as static files, same origin, no separate
+frontend deployment and no CORS needed for it. No database, no identity provider - those stay
+separate. This is the whole real deployment: the API, Postgres, and - when the physical rig is
+attached - the LED panel's Pico and a bare-metal Klipper instance, **all on the same Raspberry Pi**.
 
 ## Run it
 
@@ -27,9 +29,13 @@ openssl rand -base64 32
 docker compose up -d
 ```
 
-The API is live at `http://localhost:8080`. This alone runs with the hardware side in **mock
-mode** - LED and carriage commands are logged instead of sent - which is what you want anywhere
-that isn't the actual cabinet: a dev machine, CI, a staging host.
+The game is live at `http://localhost:8080` - open it in a browser, that's the whole app. This
+alone runs with the hardware side in **mock mode** - LED and carriage commands are logged instead
+of sent - which is what you want anywhere that isn't the actual cabinet: a dev machine, CI, a
+staging host.
+
+Want players to reach it by joining the cabinet's own WiFi instead of typing an address? See
+[`captive-portal.md`](./captive-portal.md).
 
 ## On the actual hardware
 
@@ -60,6 +66,9 @@ carriage there physically before starting a round.
 ## `.env` overrides everything
 
 Every value in `compose.yml`/`compose.hardware.yml` is written `${VAR:-default}`, so anything in
-`.env` wins. `Cors__AllowedOrigins__0` in particular needs to be your actual deployed frontend's
-origin - left at the default, the browser will reject every request from anywhere but
-`localhost:4200`.
+`.env` wins.
+
+`Cors__AllowedOrigins__0` doesn't matter for this deployment - the frontend is served by the same
+API on the same origin, so there's no cross-origin request to allow in the first place. It only
+matters if you're running the Angular dev server (`ng serve`) against a deployed API, which is a
+development setup, not this one.

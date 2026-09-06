@@ -52,6 +52,12 @@ builder.Services.AddDbContext<LuckyMazeDbContext>(options =>
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddHttpClient();
 
+// Same-origin production deployment: the Angular build lands in wwwroot (see the Dockerfile's
+// frontend-build stage), and this serves it alongside the API. Nothing to configure client-side -
+// environment.prod.ts already points apiBaseUrl at window.location.origin. Dev keeps the frontend
+// on its own ng serve port instead, reached over CORS.
+builder.Services.AddSpaStaticFiles(options => options.RootPath = "wwwroot");
+
 builder.Services.AddCors(options =>
 {
     var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
@@ -109,6 +115,11 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+app.UseStaticFiles();
+
+if (app.Environment.IsProduction())
+    app.UseSpaStaticFiles();
+
 app.UseCors("DefaultCorsPolicy");
 app.UseAuthentication();
 app.UseAuthorization();
@@ -123,5 +134,12 @@ app.MapToamaisutaaPasswordEndpoints();
 
 app.MapControllers();
 app.MapHub<GameHub>("/hubs/game");
+
+// Any request that doesn't match an API route, a hub, or a static asset falls through to the SPA.
+// This is also what makes the WiFi captive portal work: every device that joins gets DNS pointed at
+// this host and every HTTP request NATed to it (see docs/captive-portal.md), so whatever URL the
+// OS's connectivity check happens to hit lands here and gets the game instead of "no internet".
+if (app.Environment.IsProduction())
+    app.MapFallbackToFile("index.html").AllowAnonymous();
 
 app.Run();
