@@ -37,6 +37,14 @@ namespace LuckyMaze.Infrastructure.Services
                 existing.GameSpeedMs = settings.GameSpeedMs;
                 existing.MinBet = settings.MinBet;
                 existing.MaxBet = settings.MaxBet;
+                existing.PixelPitchMm = settings.PixelPitchMm;
+                existing.OriginOffsetXMm = settings.OriginOffsetXMm;
+                existing.OriginOffsetYMm = settings.OriginOffsetYMm;
+                existing.InvertX = settings.InvertX;
+                existing.InvertY = settings.InvertY;
+                existing.StepFeedRateMmPerMin = settings.StepFeedRateMmPerMin;
+                existing.TravelFeedRateMmPerMin = settings.TravelFeedRateMmPerMin;
+                existing.AccelerationMmPerSec2 = settings.AccelerationMmPerSec2;
             }
             else
             {

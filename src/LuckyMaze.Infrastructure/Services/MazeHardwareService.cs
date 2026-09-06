@@ -3,6 +3,7 @@ using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using LuckyMaze.Domain;
 using LuckyMaze.Domain.Enums;
@@ -34,14 +35,7 @@ namespace LuckyMaze.Infrastructure.Services
 
         private readonly string? _picoPortName;
         private readonly string? _klippySocketPath;
-        private readonly decimal _pixelPitchMm;
-        private readonly decimal _originOffsetXMm;
-        private readonly decimal _originOffsetYMm;
-        private readonly bool _invertX;
-        private readonly bool _invertY;
-        private readonly int _stepFeedRate;
-        private readonly int _travelFeedRate;
-        private readonly int? _accelerationMmPerSec2;
+        private readonly IServiceScopeFactory _scopeFactory;
 
         private SerialPort? _serialPort;
         private bool _isSerialInitialized = false;
@@ -57,33 +51,34 @@ namespace LuckyMaze.Infrastructure.Services
 
         public MazeHardwareService(
             IConfiguration configuration,
-            ILogger<MazeHardwareService> logger)
+            ILogger<MazeHardwareService> logger,
+            IServiceScopeFactory scopeFactory)
         {
             _logger = logger;
+            _scopeFactory = scopeFactory;
 
+            // These stay in .env, not GameSettings: they're tied to this specific container's
+            // device/volume mounts (compose.hardware.yml), so changing them needs a restart
+            // regardless of where the value lives. Everything else about carriage calibration -
+            // pixel pitch, origin offset, axis inversion, feed rates, acceleration - lives in
+            // GameSettings instead (see GetCalibrationAsync), editable live from the admin panel
+            // with no restart or redeploy.
             _picoPortName = configuration["Hardware:PicoPort"];
             _klippySocketPath = configuration["Hardware:KlippySocketPath"];
-            // Waveshare P3 default: 3mm between LED centers. The carriage's target is derived
-            // from this and the panel's own raster pixel coordinates (ToRasterCoords), not an
-            // independent per-maze-cell distance - see PhysicalMm below for why.
-            _pixelPitchMm = configuration.GetValue<decimal>("Hardware:PixelPitchMm", 3.0m);
-            // There are no endstops on this rig (see InitializeAsync), so "origin" is wherever the
-            // carriage was hand-parked before the round started. These nudge that hand-parked zero
-            // to actually line up with the panel's physical top-left corner underneath it - the
-            // only calibration anchor available without endstops.
-            _originOffsetXMm = configuration.GetValue<decimal>("Hardware:OriginOffsetXMm", 0m);
-            _originOffsetYMm = configuration.GetValue<decimal>("Hardware:OriginOffsetYMm", 0m);
-            // Whether the carriage's physical axis points the same direction as the panel's raster
-            // coordinate increasing - depends entirely on this rig's CoreXY mounting/wiring, no way
-            // to know it in advance. Mirrored around the panel's own center rather than negated, so
-            // flipping this doesn't push the target outside the same physical travel range.
-            _invertX = configuration.GetValue<bool>("Hardware:InvertX", false);
-            _invertY = configuration.GetValue<bool>("Hardware:InvertY", false);
-            _stepFeedRate = configuration.GetValue<int>("Hardware:StepFeedRateMmPerMin", 2400);
-            _travelFeedRate = configuration.GetValue<int>("Hardware:TravelFeedRateMmPerMin", 3000);
-            _accelerationMmPerSec2 = configuration.GetValue<int?>("Hardware:AccelerationMmPerSec2");
 
             InitializeSerialPort();
+        }
+
+        /// <summary>
+        /// MazeHardwareService is a singleton (it owns the persistent SerialPort), so it can't
+        /// constructor-inject the scoped GameSettings/DbContext - it resolves them fresh through a
+        /// scope on every call instead, the same pattern GameManager uses for the same reason.
+        /// </summary>
+        private async Task<GameSettings> GetCalibrationAsync()
+        {
+            await using var scope = _scopeFactory.CreateAsyncScope();
+            var settingsService = scope.ServiceProvider.GetRequiredService<IGameSettingsService>();
+            return await settingsService.GetSettingsAsync();
         }
 
         private void InitializeSerialPort()
@@ -227,6 +222,8 @@ namespace LuckyMaze.Infrastructure.Services
         {
             _logger.LogInformation("Initializing physical maze layout.");
 
+            var settings = await GetCalibrationAsync();
+
             var cells = JsonSerializer.Deserialize<List<MazeCell>>(maze.GridData) ?? new();
             var raster = BuildRaster(maze.Width, maze.Height, cells);
 
@@ -246,17 +243,16 @@ namespace LuckyMaze.Infrastructure.Services
             await SendGCodeAsync("SET_KINEMATIC_POSITION X=0 Y=0 Z=0");
             await SendGCodeAsync("G90"); // Absolute positioning
 
-            // Tunable from config (Hardware:AccelerationMmPerSec2) rather than baked into
-            // printer.cfg, so acceleration can be adjusted per-rig without touching Klipper's
-            // own config or restarting it.
-            if (_accelerationMmPerSec2 is { } accel)
+            // Tunable live from GameSettings rather than baked into printer.cfg, so acceleration
+            // can be adjusted per-rig without touching Klipper's own config or restarting it.
+            if (settings.AccelerationMmPerSec2 is { } accel)
                 await SendGCodeAsync($"M204 S{accel}");
 
             // Move the magnetic carriage to the center start cell - the same raster pixel the LED
             // dot's very first MOVE will also target, so both land in the same place.
             var (startRasterX, startRasterY) = ToRasterCoords(maze.Width / 2, maze.Height / 2);
-            var (startX, startY) = PhysicalMm(startRasterX, startRasterY);
-            await SendGCodeAsync($"G1 X{startX:F1} Y{startY:F1} F{_travelFeedRate}");
+            var (startX, startY) = PhysicalMm(startRasterX, startRasterY, settings);
+            await SendGCodeAsync($"G1 X{startX:F1} Y{startY:F1} F{settings.TravelFeedRateMmPerMin}");
         }
 
         /// <summary>
@@ -431,14 +427,14 @@ namespace LuckyMaze.Infrastructure.Services
         /// coordinate, so the magnet is guaranteed to sit under the pixel showing the ball rather
         /// than tracking an unrelated, maze-size-dependent distance.
         /// </summary>
-        private (decimal X, decimal Y) PhysicalMm(int rasterX, int rasterY)
+        private static (decimal X, decimal Y) PhysicalMm(int rasterX, int rasterY, GameSettings settings)
         {
-            int x = _invertX ? PanelSize - 1 - rasterX : rasterX;
-            int y = _invertY ? PanelSize - 1 - rasterY : rasterY;
+            int x = settings.InvertX ? PanelSize - 1 - rasterX : rasterX;
+            int y = settings.InvertY ? PanelSize - 1 - rasterY : rasterY;
 
             return (
-                _originOffsetXMm + x * _pixelPitchMm,
-                _originOffsetYMm + y * _pixelPitchMm);
+                settings.OriginOffsetXMm + x * settings.PixelPitchMm,
+                settings.OriginOffsetYMm + y * settings.PixelPitchMm);
         }
 
         /// <summary>
@@ -467,16 +463,20 @@ namespace LuckyMaze.Infrastructure.Services
         {
             _logger.LogInformation("Pushed step to hardware: ({X}, {Y}) moving {Direction}", x, y, direction);
 
+            var settings = await GetCalibrationAsync();
+
             var (px, py) = ToRasterCoords(x, y);
             await SendCommandAsync($"MOVE {px} {py} {_rasterCorridor}");
 
-            var (posX, posY) = PhysicalMm(px, py);
-            await SendGCodeAsync($"G1 X{posX:F1} Y{posY:F1} F{_stepFeedRate}");
+            var (posX, posY) = PhysicalMm(px, py, settings);
+            await SendGCodeAsync($"G1 X{posX:F1} Y{posY:F1} F{settings.StepFeedRateMmPerMin}");
         }
 
         public async Task FlashWinnerAsync(string exitName)
         {
             _logger.LogInformation("Flashing winner exit: {ExitName}", exitName);
+
+            var settings = await GetCalibrationAsync();
 
             // The Pico has no dedicated "win" command; celebrate with a green text overlay instead.
             await SendCommandAsync("COLOR 00FF00");
@@ -487,9 +487,9 @@ namespace LuckyMaze.Infrastructure.Services
             // origin would yank it clear across the panel instead of wiggling where it stopped.
             // Net displacement is zero (+5, -10, +5) so it ends exactly where it started.
             await SendGCodeAsync("G91");
-            await SendGCodeAsync($"G1 X5 F{_travelFeedRate}");
-            await SendGCodeAsync($"G1 X-10 F{_travelFeedRate}");
-            await SendGCodeAsync($"G1 X5 F{_travelFeedRate}");
+            await SendGCodeAsync($"G1 X5 F{settings.TravelFeedRateMmPerMin}");
+            await SendGCodeAsync($"G1 X-10 F{settings.TravelFeedRateMmPerMin}");
+            await SendGCodeAsync($"G1 X5 F{settings.TravelFeedRateMmPerMin}");
             await SendGCodeAsync("G90");
         }
 
@@ -497,11 +497,13 @@ namespace LuckyMaze.Infrastructure.Services
         {
             _logger.LogInformation("Resetting physical maze components.");
 
+            var settings = await GetCalibrationAsync();
+
             // CLEAR blanks the grid, the dot and any text overlay on the Pico.
             await SendCommandAsync("CLEAR");
 
             // Move stepper motors to safe park coordinates (0, 0)
-            await SendGCodeAsync($"G1 X0 Y0 F{_travelFeedRate}");
+            await SendGCodeAsync($"G1 X0 Y0 F{settings.TravelFeedRateMmPerMin}");
         }
 
         public void Dispose()

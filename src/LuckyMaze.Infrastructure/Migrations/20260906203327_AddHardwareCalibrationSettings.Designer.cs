@@ -3,6 +3,7 @@ using System;
 using LuckyMaze.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace LuckyMaze.Infrastructure.Migrations
 {
     [DbContext(typeof(LuckyMazeDbContext))]
-    partial class LuckyMazeDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260906203327_AddHardwareCalibrationSettings")]
+    partial class AddHardwareCalibrationSettings
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

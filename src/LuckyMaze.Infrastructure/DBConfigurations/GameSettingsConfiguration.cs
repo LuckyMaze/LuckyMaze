@@ -20,6 +20,14 @@ namespace LuckyMaze.Infrastructure.DBConfigurations
                 GameSpeedMs = 850,
                 MinBet = 1.00m,
                 MaxBet = 500.00m,
+                PixelPitchMm = 3.0m,
+                OriginOffsetXMm = 0m,
+                OriginOffsetYMm = 0m,
+                InvertX = false,
+                InvertY = false,
+                StepFeedRateMmPerMin = 2400,
+                TravelFeedRateMmPerMin = 3000,
+                AccelerationMmPerSec2 = null,
                 CreatedAt = new DateTime(2025, 1, 1, 0, 0, 0, DateTimeKind.Utc),
                 UpdatedAt = new DateTime(2025, 1, 1, 0, 0, 0, DateTimeKind.Utc)
             });

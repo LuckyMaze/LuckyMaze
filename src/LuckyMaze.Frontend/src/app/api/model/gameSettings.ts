@@ -18,6 +18,14 @@ export interface GameSettings {
     gameSpeedMs?: number;
     minBet?: number;
     maxBet?: number;
+    pixelPitchMm?: number;
+    originOffsetXMm?: number;
+    originOffsetYMm?: number;
+    invertX?: boolean;
+    invertY?: boolean;
+    stepFeedRateMmPerMin?: number;
+    travelFeedRateMmPerMin?: number;
+    accelerationMmPerSec2?: number | null;
 }
 export namespace GameSettings {
 }
