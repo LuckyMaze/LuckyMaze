@@ -9,9 +9,8 @@
  */
 
 
-export interface MazeExit { 
-    x?: number;
-    y?: number;
-    name: string | null;
+export interface PlaceBetRequest { 
+    exitName: string | null;
+    amount?: number;
 }
 

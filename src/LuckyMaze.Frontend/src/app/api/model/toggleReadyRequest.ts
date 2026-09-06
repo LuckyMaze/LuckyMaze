@@ -9,9 +9,7 @@
  */
 
 
-export interface MazeExit { 
-    x?: number;
-    y?: number;
-    name: string | null;
+export interface ToggleReadyRequest { 
+    isReady?: boolean;
 }
 

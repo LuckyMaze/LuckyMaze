@@ -16,7 +16,7 @@ namespace LuckyMaze.Infrastructure.DBConfigurations
             builder.HasData(new GameSettings
             {
                 Id = Guid.Parse("00000000-0000-0000-0000-000000000001"),
-                MazeSize = MazeSize.Large64x64,
+                MazeSize = MazeSize.Grid21x21,
                 GameSpeedMs = 850,
                 MinBet = 1.00m,
                 MaxBet = 500.00m,
