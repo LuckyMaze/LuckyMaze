@@ -94,4 +94,32 @@
       </button>
     </div>
   </form>
+
+  <div hlmCardHeader class="px-6 pt-0">
+    <h2 class="text-xl font-semibold">System</h2>
+    <p hlmCardDescription>Actions on the Raspberry Pi itself - both need physical access to undo if something goes wrong.</p>
+  </div>
+
+  <div hlmCardContent class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+    <div class="space-y-2">
+      <label hlmLabel>Network Mode</label>
+      <p class="text-sm text-muted-foreground">Switching to the cabinet's own hotspot disconnects the Pi from your home WiFi immediately - including this panel, if that's how you're reaching it.</p>
+      <div class="flex items-center gap-2">
+        <hlm-switch [(checked)]="makeHotspotPermanent" />
+        <span class="text-sm text-muted-foreground">Skip the 10-minute auto-revert (confirm the hotspot works first)</span>
+      </div>
+      <div class="flex gap-2">
+        <button type="button" hlmBtn variant="outline" (click)="enableHotspot()">Switch to Hotspot</button>
+        <button type="button" hlmBtn variant="outline" (click)="disableHotspot()">Switch to WiFi</button>
+      </div>
+    </div>
+
+    <div class="space-y-2">
+      <label hlmLabel>Power</label>
+      <p class="text-sm text-muted-foreground">Parks the carriage, then shuts down the Pi. It needs to be physically powered back on.</p>
+      <button type="button" hlmBtn variant="destructive" (click)="shutdown()">Shut Down</button>
+    </div>
+
+  </div>
 </section>

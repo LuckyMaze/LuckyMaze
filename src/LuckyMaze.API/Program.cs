@@ -80,6 +80,7 @@ builder.Services.AddScoped<IGameSettingsService, GameSettingsService>();
 builder.Services.AddSingleton<IMazeGenerator, MazeGenerator>();
 builder.Services.AddSingleton<IAiSolver, AiSolver>();
 builder.Services.AddSingleton<IMazeHardwareService, MazeHardwareService>();
+builder.Services.AddSingleton<IHostAgentService, HostAgentService>();
 builder.Services.AddSingleton<IGameNotificationService, GameNotificationService>();
 builder.Services.AddSingleton<GameManager>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<GameManager>());

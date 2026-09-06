@@ -11,10 +11,11 @@ services:
     environment:
       Hardware__PicoPort: "${Hardware__PicoPort:-/dev/ttyACM0}"
       Hardware__KlippySocketPath: "${Hardware__KlippySocketPath:-/home/lucky-user/printer_data/comms/klippy.sock}"
+      Hardware__HostAgentRequestPath: "${Hardware__HostAgentRequestPath:-/hostagent/requests}"
       # Pixel pitch, origin offset, axis inversion, feed rates and acceleration all live in
       # GameSettings now (admin panel), not here - they're per-rig physical calibration with no
-      # reason to need a restart to change, unlike these two paths and the group IDs below, which
-      # are tied to this container's actual device/volume mounts.
+      # reason to need a restart to change, unlike these paths and the group IDs below, which are
+      # tied to this container's actual device/volume mounts.
     devices:
       - "${Hardware__PicoPort:-/dev/ttyACM0}:${Hardware__PicoPort:-/dev/ttyACM0}"
     group_add:
@@ -24,3 +25,7 @@ services:
       - "${Hardware__KlipperGroupId:-1000}"
     volumes:
       - "${Hardware__KlippySocketPath:-/home/lucky-user/printer_data/comms/klippy.sock}:${Hardware__KlippySocketPath:-/home/lucky-user/printer_data/comms/klippy.sock}"
+      # Shared with the host agent (scripts/hostagent) - the container writes request files here,
+      # the agent (running outside Docker, with the privilege the container doesn't have) picks
+      # them up and performs the actual shutdown/network-mode change. See docs/deployment.md.
+      - "${Hardware__HostAgentRequestPathHost:-/home/lucky-user/hostagent/requests}:/hostagent/requests"

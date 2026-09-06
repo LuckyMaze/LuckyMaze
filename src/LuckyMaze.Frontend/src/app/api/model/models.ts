@@ -7,6 +7,8 @@ export * from './leaderboardEntryDto';
 export * from './mazeCell';
 export * from './mazeExit';
 export * from './mazeSize';
+export * from './networkMode';
+export * from './networkModeRequest';
 export * from './placeBetRequest';
 export * from './problemDetails';
 export * from './toggleReadyRequest';
