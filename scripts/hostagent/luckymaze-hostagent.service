@@ -1,0 +1,13 @@
+[Unit]
+Description=LuckyMaze host agent (privileged actions requested by the API container)
+After=network.target docker.service
+
+[Service]
+Type=simple
+ExecStart=/bin/bash /home/lucky-user/LuckyMaze/scripts/hostagent/agent.sh
+Restart=always
+RestartSec=5
+User=root
+
+[Install]
+WantedBy=multi-user.target

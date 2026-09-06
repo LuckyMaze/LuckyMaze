@@ -31,23 +31,41 @@ own, and the pieces below just make sure whatever they check lands on the game.
 This is the same mechanism airport and hotel WiFi portals use - nothing LuckyMaze-specific about
 steps 1-4, only step 4's *content* (the game itself) is.
 
-## Set it up
+## Install, then toggle it on and off
 
 Requires the [SPA-bundled deployment](./deployment.md) already running on this Pi - the portal
-redirects to whatever port the game listens on.
+redirects to whatever port the game listens on. Install once:
 
 ```bash
-sudo LUCKYMAZE_PORT=8080 ./scripts/captive-portal/setup.sh
+sudo scripts/captive-portal/install.sh
 ```
 
-`LUCKYMAZE_PORT` should match `LuckyMaze__Port` from your `.env` (default `8080`). The script:
+This installs `hostapd`, `dnsmasq`, `nftables`, `scripts/captive-portal/hostapd.conf` and
+`dnsmasq.conf`, and the static-address unit for `wlan0` - but doesn't turn any of it on yet.
 
-- installs `hostapd`, `dnsmasq`, `nftables`
-- tells NetworkManager to leave `wlan0` alone (so it doesn't fight hostapd for the interface)
-- gives `wlan0` a static address (`192.168.4.1`) via a small systemd unit that runs before hostapd
-- installs `scripts/captive-portal/hostapd.conf` and `dnsmasq.conf`
-- adds the nftables redirect/drop rules, persisted so they survive a reboot
-- enables and starts everything
+Turn the hotspot on and off with:
+
+```bash
+sudo LUCKYMAZE_PORT=8080 scripts/captive-portal/enable.sh   # wlan0 becomes the cabinet's own AP
+sudo scripts/captive-portal/disable.sh                      # wlan0 goes back to a normal WiFi client
+```
+
+`LUCKYMAZE_PORT` should match `LuckyMaze__Port` from your `.env` (default `8080`). `enable.sh` tells
+NetworkManager to leave `wlan0` alone, brings up the static address (`192.168.4.1`), starts
+hostapd/dnsmasq, and adds the nftables redirect/drop rules. `disable.sh` reverses all of that and
+lets NetworkManager reconnect `wlan0` to whatever network it already had a saved profile for.
+
+**Enabling drops your connection to whatever `wlan0` was previously on - SSH included, if that's
+how you're connected to the Pi.** One WiFi radio can't be an access point and a client at once.
+
+### From the admin panel instead
+
+Once [`scripts/hostagent/install.sh`](./deployment.md#host-agent---shutdown-and-network-mode-from-the-admin-panel)
+has been run too, the game's own admin panel has a Network Mode toggle that does the same
+enable/disable through the host agent - no SSH needed. As a safety net against getting stranded
+after a mistaken toggle, enabling the hotspot from the panel auto-reverts to WiFi after 10 minutes
+unless you explicitly mark it permanent (do that once you've confirmed the hotspot actually works,
+e.g. from a phone already connected to it - not before).
 
 ## Why `wlan0` only
 
@@ -59,9 +77,9 @@ connected phones internet access either; there's nothing to share, and the game 
 ## Changing the SSID, password, or IP range
 
 Edit `scripts/captive-portal/hostapd.conf` (SSID, channel, or add `wpa=2` / `wpa_passphrase=...` for
-a password - the portal works either way) and `dnsmasq.conf` (DHCP range), then re-run `setup.sh`.
-If you change `192.168.4.1`, update `AP_IP` at the top of `setup.sh` too - the dnsmasq wildcard and
-the static address both need to agree.
+a password - the portal works either way) and `dnsmasq.conf` (DHCP range), then re-run `install.sh`
+followed by `enable.sh`. If you change `192.168.4.1`, update `AP_IP` at the top of `enable.sh` too -
+the dnsmasq wildcard and the static address both need to agree.
 
 ## Troubleshooting
 

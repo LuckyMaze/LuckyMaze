@@ -46,7 +46,7 @@ nothing over the network. Bring in `compose.hardware.yml` on top of the base fil
 docker compose -f compose.yml -f compose.hardware.yml up -d
 ```
 
-That overlay adds four things to the `api` service, all pointed at paths on this same host:
+That overlay adds these to the `api` service, all pointed at paths on this same host:
 
 | What | Default | Why |
 |---|---|---|
@@ -54,6 +54,27 @@ That overlay adds four things to the `api` service, all pointed at paths on this
 | `group_add: - $DialoutGroupId` | `20` | The container runs as a non-root user; this adds it to the host group that owns the serial device (`dialout` on Raspberry Pi OS/Debian) so it can open the device without `--privileged`. Confirm with `getent group dialout` - `20` is standard on Raspberry Pi OS but isn't guaranteed. |
 | `group_add: - $KlipperGroupId` | `1000` | `klippy.sock` is owned by whoever runs Klipper and **their own primary group** - not `dialout`, which only covers the serial device. Confirm with `id <that-user>` (the `gid=` number). Get this wrong and it fails quietly: the panel and betting both work fine, the carriage just never moves, and the API log shows `SocketException (13): Permission denied` on every G-code send. |
 | `volumes: - $KlippySocketPath:$KlippySocketPath` | `/home/lucky-user/printer_data/comms/klippy.sock` | Bind-mounts Klipper's own Unix domain socket API straight into the container. **There is no Moonraker in this deployment** - the API talks to `gcode/script` on this socket directly, per [Klipper's API_Server docs](https://github.com/Klipper3d/klipper/blob/master/docs/API_Server.md). Find the real path with `systemctl cat klipper \| grep ExecStart` (the `-a` argument). |
+| `volumes: - $HostAgentRequestPathHost:/hostagent/requests` | `/home/lucky-user/hostagent/requests` | Shared with the host agent (below) - the API writes a request file here, the agent picks it up and performs the actual privileged action. |
+
+### Host agent - shutdown and network mode from the admin panel
+
+The API container can't power off the Pi or reconfigure its network by itself - both need real
+host privilege a container doesn't have. `scripts/hostagent/agent.sh` is a small service that runs
+directly on the Pi (not in Docker) and watches the directory above for request files; the API just
+writes one (a bare file, its name is all that matters, nothing in it is ever executed) and the
+agent performs the actual action. Install it once:
+
+```bash
+sudo scripts/hostagent/install.sh
+```
+
+This is what makes two admin panel buttons work:
+
+- **Shut down** - parks the carriage first (the same center-park G-code a normal round reset
+  uses), then powers off the Pi. The containers themselves don't need to be stopped separately -
+  `systemctl poweroff` takes them down along with everything else.
+- **Network mode** (WiFi / Hotspot) - see [`captive-portal.md`](./captive-portal.md) for what this
+  actually does. Requires `scripts/captive-portal/install.sh` to have been run too.
 
 Override any of these in `.env` if your paths differ - see `.env.example`.
 
