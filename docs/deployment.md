@@ -63,6 +63,19 @@ have homed, it instead sends `SET_KINEMATIC_POSITION X=0 Y=0 Z=0` - telling Klip
 current, hand-parked position **is** the origin, which needs no motion and no sensors. Park the
 carriage there physically before starting a round.
 
+### Movement tuning
+
+If the ball moves too fast, too slow, or too jerkily, that's `Hardware__StepFeedRateMmPerMin`
+(speed for each single-cell move during a round) and `Hardware__TravelFeedRateMmPerMin` (speed for
+the initial move to the maze's start and the return-to-origin park). Both are plain feed rates in
+mm/min, sent straight through as the G-code's `F` value - no redeploy needed to retune, just an
+`.env` change and a restart.
+
+Acceleration comes from Klipper's own `printer.cfg` by default. Set
+`Hardware__AccelerationMmPerSec2` to override it via `M204` instead - useful for tuning without
+touching `printer.cfg` on the Pi directly, but it only takes effect from the next round's
+`InitializeAsync` onward, not retroactively.
+
 ## `.env` overrides everything
 
 Every value in `compose.yml`/`compose.hardware.yml` is written `${VAR:-default}`, so anything in

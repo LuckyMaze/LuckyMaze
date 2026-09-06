@@ -35,6 +35,9 @@ namespace LuckyMaze.Infrastructure.Services
         private readonly string? _picoPortName;
         private readonly string? _klippySocketPath;
         private readonly decimal _cellSizeMm;
+        private readonly int _stepFeedRate;
+        private readonly int _travelFeedRate;
+        private readonly int? _accelerationMmPerSec2;
 
         private SerialPort? _serialPort;
         private bool _isSerialInitialized = false;
@@ -57,6 +60,9 @@ namespace LuckyMaze.Infrastructure.Services
             _picoPortName = configuration["Hardware:PicoPort"];
             _klippySocketPath = configuration["Hardware:KlippySocketPath"];
             _cellSizeMm = configuration.GetValue<decimal>("Hardware:CellSizeMm", 30.0m);
+            _stepFeedRate = configuration.GetValue<int>("Hardware:StepFeedRateMmPerMin", 2400);
+            _travelFeedRate = configuration.GetValue<int>("Hardware:TravelFeedRateMmPerMin", 3000);
+            _accelerationMmPerSec2 = configuration.GetValue<int?>("Hardware:AccelerationMmPerSec2");
 
             InitializeSerialPort();
         }
@@ -221,10 +227,16 @@ namespace LuckyMaze.Infrastructure.Services
             await SendGCodeAsync("SET_KINEMATIC_POSITION X=0 Y=0 Z=0");
             await SendGCodeAsync("G90"); // Absolute positioning
 
+            // Tunable from config (Hardware:AccelerationMmPerSec2) rather than baked into
+            // printer.cfg, so acceleration can be adjusted per-rig without touching Klipper's
+            // own config or restarting it.
+            if (_accelerationMmPerSec2 is { } accel)
+                await SendGCodeAsync($"M204 S{accel}");
+
             // Move the magnetic carriage to the center start cell.
             decimal startX = (maze.Width / 2) * _cellSizeMm;
             decimal startY = (maze.Height / 2) * _cellSizeMm;
-            await SendGCodeAsync($"G1 X{startX:F1} Y{startY:F1} F3000");
+            await SendGCodeAsync($"G1 X{startX:F1} Y{startY:F1} F{_travelFeedRate}");
         }
 
         /// <summary>
@@ -423,7 +435,7 @@ namespace LuckyMaze.Infrastructure.Services
 
             decimal posX = x * _cellSizeMm;
             decimal posY = y * _cellSizeMm;
-            await SendGCodeAsync($"G1 X{posX:F1} Y{posY:F1} F2400");
+            await SendGCodeAsync($"G1 X{posX:F1} Y{posY:F1} F{_stepFeedRate}");
         }
 
         public async Task FlashWinnerAsync(string exitName)
@@ -434,10 +446,15 @@ namespace LuckyMaze.Infrastructure.Services
             await SendCommandAsync("COLOR 00FF00");
             await SendCommandAsync($"CENTER {exitName}");
 
-            // Flash stepper motors or do a victory dance G-code (e.g. wiggle back and forth)
-            await SendGCodeAsync("G1 E5 F200"); // Example extruder click or small wiggle
-            await SendGCodeAsync("G1 X10 F4000");
-            await SendGCodeAsync("G1 X0 F4000");
+            // A small side-to-side wiggle in place. This has to be relative (G91) - the carriage
+            // can be anywhere on the maze when a round ends, so an absolute move back toward the
+            // origin would yank it clear across the panel instead of wiggling where it stopped.
+            // Net displacement is zero (+5, -10, +5) so it ends exactly where it started.
+            await SendGCodeAsync("G91");
+            await SendGCodeAsync($"G1 X5 F{_travelFeedRate}");
+            await SendGCodeAsync($"G1 X-10 F{_travelFeedRate}");
+            await SendGCodeAsync($"G1 X5 F{_travelFeedRate}");
+            await SendGCodeAsync("G90");
         }
 
         public async Task ResetAsync()
@@ -448,7 +465,7 @@ namespace LuckyMaze.Infrastructure.Services
             await SendCommandAsync("CLEAR");
 
             // Move stepper motors to safe park coordinates (0, 0)
-            await SendGCodeAsync("G1 X0 Y0 F3000");
+            await SendGCodeAsync($"G1 X0 Y0 F{_travelFeedRate}");
         }
 
         public void Dispose()
