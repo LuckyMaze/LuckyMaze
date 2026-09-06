@@ -46,15 +46,16 @@ nothing over the network. Bring in `compose.hardware.yml` on top of the base fil
 docker compose -f compose.yml -f compose.hardware.yml up -d
 ```
 
-That overlay adds three things to the `api` service, all pointed at paths on this same host:
+That overlay adds four things to the `api` service, all pointed at paths on this same host:
 
 | What | Default | Why |
 |---|---|---|
 | `devices: - $PicoPort:$PicoPort` | `/dev/ttyACM0` | USB-serial passthrough to the Pico. Confirm the actual path with `ls /dev/serial/by-id/` - it's stable across reboots, unlike `/dev/ttyACM0` if anything else is plugged in first. |
 | `group_add: - $DialoutGroupId` | `20` | The container runs as a non-root user; this adds it to the host group that owns the serial device (`dialout` on Raspberry Pi OS/Debian) so it can open the device without `--privileged`. Confirm with `getent group dialout` - `20` is standard on Raspberry Pi OS but isn't guaranteed. |
+| `group_add: - $KlipperGroupId` | `1000` | `klippy.sock` is owned by whoever runs Klipper and **their own primary group** - not `dialout`, which only covers the serial device. Confirm with `id <that-user>` (the `gid=` number). Get this wrong and it fails quietly: the panel and betting both work fine, the carriage just never moves, and the API log shows `SocketException (13): Permission denied` on every G-code send. |
 | `volumes: - $KlippySocketPath:$KlippySocketPath` | `/home/lucky-user/printer_data/comms/klippy.sock` | Bind-mounts Klipper's own Unix domain socket API straight into the container. **There is no Moonraker in this deployment** - the API talks to `gcode/script` on this socket directly, per [Klipper's API_Server docs](https://github.com/Klipper3d/klipper/blob/master/docs/API_Server.md). Find the real path with `systemctl cat klipper \| grep ExecStart` (the `-a` argument). |
 
-Override any of the three in `.env` if your paths differ - see `.env.example`.
+Override any of these in `.env` if your paths differ - see `.env.example`.
 
 ### Homing
 
