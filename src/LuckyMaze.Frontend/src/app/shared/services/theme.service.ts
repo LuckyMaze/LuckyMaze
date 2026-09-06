@@ -2,6 +2,12 @@ import { computed, effect, Injectable, signal } from '@angular/core';
 
 export type ThemeMode = 'light' | 'dark' | 'system';
 
+export const THEME_OPTIONS: ReadonlyArray<{ mode: ThemeMode; label: string; icon: string }> = [
+  { mode: 'light', label: 'Light', icon: 'lucideSun' },
+  { mode: 'dark', label: 'Dark', icon: 'lucideMoon' },
+  { mode: 'system', label: 'System', icon: 'lucideMonitor' },
+];
+
 const STORAGE_KEY = 'luckymaze.theme';
 
 @Injectable({ providedIn: 'root' })

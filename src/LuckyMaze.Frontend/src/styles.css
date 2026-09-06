@@ -81,4 +81,15 @@
   body {
     @apply bg-background text-foreground;
   }
+
+  /* Every routed page renders as router-outlet's sibling inside main[hlmSidebarInset]. Making it
+     a flex column that fills the remaining height (main is capped to one viewport) is what lets
+     the page's own overflow-y-auto region contain its scrolling instead of the whole window
+     scrolling - the difference between an app screen and a long web page. */
+  main[hlmSidebarInset] > :not(router-outlet) {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+  }
 }

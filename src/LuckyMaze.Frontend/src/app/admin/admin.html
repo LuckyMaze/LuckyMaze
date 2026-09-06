@@ -1,4 +1,4 @@
-<section hlmCard class="max-w-4xl mx-auto mt-6">
+<section hlmCard class="mx-auto mt-6 mb-16 min-h-0 w-full max-w-4xl flex-1 overflow-y-auto md:mb-6">
   <div hlmCardHeader>
     <h1 hlmCardTitle class="text-3xl">Admin Dashboard</h1>
     <p hlmCardDescription>Configure global game settings. These settings will apply to the next generated maze.</p>
@@ -10,7 +10,9 @@
       <div class="space-y-2">
         <label hlmLabel>Maze Size</label>
         <select hlmNativeSelect formControlName="mazeSize">
-          <option *ngFor="let size of mazeSizes" [ngValue]="size.value" hlmNativeSelectOption>{{ size.label }}</option>
+          @for (size of mazeSizes; track size.value) {
+            <option [ngValue]="size.value" hlmNativeSelectOption>{{ size.label }}</option>
+          }
         </select>
         <p class="text-sm text-muted-foreground">Determines the dimensions of the generated maze.</p>
       </div>

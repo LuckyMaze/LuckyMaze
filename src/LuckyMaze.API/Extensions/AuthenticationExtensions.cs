@@ -1,12 +1,17 @@
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using LuckyMaze.Infrastructure.Services;
-using System.Security.Claims;
 
 namespace LuckyMaze.API.Extensions
 {
     public static class AuthenticationExtensions
     {
+        /// <summary>
+        /// Ensures a LuckyMaze <see cref="LuckyMaze.Domain.User"/> row exists for whoever just
+        /// authenticated, whichever way they did it - OIDC or Toamaisutaa's local login both end up
+        /// here. Toamaisutaa's own <c>ICurrentUser.GetOrProvisionAsync</c> only creates its own
+        /// identity row; the game-specific one (balance, role, ready flag) is ours to keep in sync.
+        /// </summary>
         public static AuthenticationBuilder AddUserSync(this AuthenticationBuilder builder)
         {
             builder.Services.PostConfigure<JwtBearerOptions>(
@@ -21,33 +26,15 @@ namespace LuckyMaze.API.Extensions
                         if (previous is not null)
                             await previous(context);
 
-                        if (context.Principal?.Identity is not ClaimsIdentity identity)
+                        if (context.Principal is null)
                             return;
 
+                        // ICurrentUser reads HttpContext.User, which the framework only assigns
+                        // after this event returns. Provisioning needs it now.
                         context.HttpContext.User = context.Principal;
 
-                        var externalId = identity.FindFirst("sub")?.Value ?? identity.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-
-                        if (string.IsNullOrEmpty(externalId))
-                            return;
-
                         var userService = context.HttpContext.RequestServices.GetRequiredService<IUserService>();
-                        var dbContext = context.HttpContext.RequestServices.GetRequiredService<LuckyMaze.Infrastructure.LuckyMazeDbContext>();
-
-                        var user = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.SingleOrDefaultAsync(
-                            dbContext.Users, u => u.ExternalId == externalId, context.HttpContext.RequestAborted);
-
-                        if (user is null)
-                        {
-                            await userService.SyncCurrentUserAsync(context.HttpContext.RequestAborted);
-                            user = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.SingleOrDefaultAsync(
-                                dbContext.Users, u => u.ExternalId == externalId, context.HttpContext.RequestAborted);
-                        }
-
-                        if (user is not null && user.Role == LuckyMaze.Domain.Enums.UserRole.Admin)
-                        {
-                            identity.AddClaim(new Claim("groups", "admin"));
-                        }
+                        await userService.SyncCurrentUserAsync(context.HttpContext.RequestAborted);
                     };
                 });
 

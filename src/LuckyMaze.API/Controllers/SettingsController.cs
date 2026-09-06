@@ -26,7 +26,7 @@ namespace LuckyMaze.API.Controllers
         }
 
         [HttpPut]
-        [Authorize(Roles = "admin")]
+        [Authorize(Policy = "Toamaisutaa.Admin")]
         public async Task<IActionResult> UpdateSettings([FromBody] GameSettings settings)
         {
             if (!ModelState.IsValid)

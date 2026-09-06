@@ -1,0 +1,46 @@
+<div class="flex min-h-screen items-center justify-center p-4">
+  <section hlmCard class="w-full max-w-sm">
+    <div hlmCardHeader>
+      <h1 hlmCardTitle class="text-2xl">Create an account</h1>
+      <p hlmCardDescription>Open to everyone - no invite needed.</p>
+    </div>
+
+    <form [formGroup]="form" (ngSubmit)="submit()">
+      <div hlmCardContent class="space-y-4">
+        <div class="space-y-2">
+          <label hlmLabel for="userName">Username</label>
+          <input
+            id="userName"
+            type="text"
+            hlmInput
+            class="w-full"
+            formControlName="userName"
+            autocomplete="username"
+          />
+        </div>
+
+        <div class="space-y-2">
+          <label hlmLabel for="password">Password</label>
+          <input
+            id="password"
+            type="password"
+            hlmInput
+            class="w-full"
+            formControlName="password"
+            autocomplete="new-password"
+          />
+          <p class="text-sm text-muted-foreground">At least 8 characters.</p>
+        </div>
+      </div>
+
+      <div hlmCardFooter class="flex-col items-stretch gap-3">
+        <button type="submit" hlmBtn [disabled]="form.invalid || submitting()" class="w-full">
+          {{ submitting() ? 'Creating account…' : 'Create account' }}
+        </button>
+        <p class="text-center text-sm text-muted-foreground">
+          Already have an account? <a routerLink="/login" class="underline">Sign in</a>
+        </p>
+      </div>
+    </form>
+  </section>
+</div>

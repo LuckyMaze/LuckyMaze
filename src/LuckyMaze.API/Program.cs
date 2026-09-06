@@ -1,7 +1,6 @@
-using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi;
+using Toamaisutaa.Abstractions;
 using LuckyMaze.API.Extensions;
 using LuckyMaze.Infrastructure;
 using LuckyMaze.Infrastructure.Services;
@@ -21,33 +20,19 @@ builder.Services.AddControllers()
 
 builder.Services.AddSwaggerGen(options =>
 {
-    var authority = builder.Configuration["Oidc:Authority"]
-        ?? throw new InvalidOperationException("Oidc:Authority not configured");
-
-    options.AddSecurityDefinition("OAuth2", new OpenApiSecurityScheme
+    // Toamaisutaa issues plain bearer tokens - from an identity provider's OIDC flow when one is
+    // configured, or from POST /auth/login when it isn't - so one HTTP bearer scheme covers both.
+    options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
-        Type = SecuritySchemeType.OAuth2,
-        Flows = new OpenApiOAuthFlows
-        {
-            AuthorizationCode = new OpenApiOAuthFlow
-            {
-                AuthorizationUrl = new Uri($"{authority}/authorize"),
-                TokenUrl = new Uri($"{authority}/api/oidc/token"),
-                Scopes = new Dictionary<string, string>
-                {
-                    ["openid"] = "OpenID Connect",
-                    ["profile"] = "User profile",
-                    ["email"] = "User email",
-                    ["groups"] = "User groups (roles)",
-                    ["picture"] = "Profile Picture",
-                }
-            }
-        }
+        Type = SecuritySchemeType.Http,
+        Scheme = "bearer",
+        BearerFormat = "JWT",
+        Description = "Paste the access_token from POST /auth/login.",
     });
 
     options.AddSecurityRequirement(document => new OpenApiSecurityRequirement
     {
-        [new OpenApiSecuritySchemeReference("OAuth2", document)] = new List<string>()
+        [new OpenApiSecuritySchemeReference("Bearer", document)] = new List<string>()
     });
 });
 
@@ -79,7 +64,6 @@ builder.Services.AddCors(options =>
 });
 
 builder.Services.AddSignalR();
-builder.Services.AddScoped<IOidcService, OidcService>();
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IGameSettingsService, GameSettingsService>();
 builder.Services.AddSingleton<IMazeGenerator, MazeGenerator>();
@@ -89,37 +73,26 @@ builder.Services.AddSingleton<IGameNotificationService, GameNotificationService>
 builder.Services.AddSingleton<GameManager>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<GameManager>());
 
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(options =>
-    {
-        options.Authority = builder.Configuration["Oidc:Authority"];
-        options.RequireHttpsMetadata = builder.Configuration.GetValue("Oidc:RequireHttpsMetadata", true);
-        options.TokenValidationParameters.NameClaimType = "name";
-        options.TokenValidationParameters.RoleClaimType = "groups";
-        options.TokenValidationParameters.ValidateAudience = false;
+// Validates OIDC access tokens against Oidc:Authority when one is configured, and Toamaisutaa's own
+// locally issued tokens either way - one handler, one scheme, neither downstream code nor an
+// endpoint can tell which kind of token it is holding.
+builder.Services.AddToamaisutaaBearer(builder.Configuration).AddUserSync();
 
-        // SignalR transports can't send an Authorization header, so the token
-        // arrives as an access_token query parameter on hub requests.
-        options.Events = new JwtBearerEvents
-        {
-            OnMessageReceived = context =>
-            {
-                var accessToken = context.Request.Query["access_token"];
-                if (!string.IsNullOrEmpty(accessToken) &&
-                    context.HttpContext.Request.Path.StartsWithSegments("/hubs"))
-                {
-                    context.Token = accessToken;
-                }
-                return Task.CompletedTask;
-            }
-        };
-    })
-    .AddUserSync();
+// Authenticated by default, plus the "Toamaisutaa.Admin" policy from Oidc:AdminRole.
+builder.Services.AddToamaisutaaAuthorization(builder.Configuration);
 
-builder.Services.AddAuthorization(options =>
-    options.FallbackPolicy = new AuthorizationPolicyBuilder()
-        .RequireAuthenticatedUser()
-        .Build());
+// Roles for a locally issued token come from our own User.Role rather than an identity provider's
+// claim. Registered before AddToamaisutaaPasswordLogin, which only fills the slot if it is empty.
+builder.Services.AddScoped<IUserRoleProvider, LuckyMazeUserRoleProvider>();
+
+builder.Services.AddToamaisutaaProvisioning();
+builder.Services.AddToamaisutaaEntityFrameworkStores<LuckyMazeDbContext>();
+builder.Services.AddToamaisutaaCurrentUser();
+
+// Local username/password sign-in and open self-registration - no identity provider required.
+builder.Services.AddToamaisutaaPasswordLogin(builder.Configuration);
+builder.Services.AddSingleton<IPasswordResetNotifier, LoggingPasswordResetNotifier>();
+builder.Services.AddToamaisutaaTokenCleanup();
 
 var app = builder.Build();
 
@@ -128,21 +101,21 @@ app.ApplyMigrations();
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
-    app.UseSwaggerUI(options =>
-    {
-        options.OAuthClientId(builder.Configuration["Oidc:ClientId"]);
-        options.OAuthUsePkce();
-        options.OAuthScopes("openid", "profile", "email", "groups", "picture");
-
-        options.UseRequestInterceptor(
-            "(req) => { if (req.url.includes('/oidc/token')) { delete req.headers['X-Requested-With']; } return req; }"
-        );
-    });
+    app.UseSwaggerUI();
 }
 
 app.UseCors("DefaultCorsPolicy");
 app.UseAuthentication();
 app.UseAuthorization();
+
+// The SPA's runtime OIDC config is served by AppController (already at GET /api/app), backed by
+// the same Oidc:* configuration Toamaisutaa itself binds - so MapToamaisutaaConfiguration is
+// deliberately not mapped here, to avoid two handlers on the same route.
+
+// POST /auth/login, /auth/refresh, /auth/logout, /auth/register, /auth/password,
+// /auth/password/forgot, /auth/password/reset.
+app.MapToamaisutaaPasswordEndpoints();
+
 app.MapControllers();
 app.MapHub<GameHub>("/hubs/game");
 

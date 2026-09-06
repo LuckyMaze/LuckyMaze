@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
+using Toamaisutaa.EntityFrameworkCore;
 using LuckyMaze.Domain;
 
 namespace LuckyMaze.Infrastructure
@@ -15,6 +16,7 @@ namespace LuckyMaze.Infrastructure
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             modelBuilder.ApplyConfigurationsFromAssembly(typeof(LuckyMazeDbContext).Assembly);
+            modelBuilder.ApplyToamaisutaaConfiguration();
         }
 
         public override int SaveChanges(bool acceptAllChangesOnSuccess)
