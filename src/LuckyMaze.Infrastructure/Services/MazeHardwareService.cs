@@ -466,10 +466,17 @@ namespace LuckyMaze.Infrastructure.Services
             var settings = await GetCalibrationAsync();
 
             var (px, py) = ToRasterCoords(x, y);
-            await SendCommandAsync($"MOVE {px} {py} {_rasterCorridor}");
-
             var (posX, posY) = PhysicalMm(px, py, settings);
-            await SendGCodeAsync($"G1 X{posX:F1} Y{posY:F1} F{settings.StepFeedRateMmPerMin}");
+
+            // Dispatched together, not sequentially: MOVE's reply is instant (the Pico just
+            // draws, no animation), but G1's reply - per Klipper's own API_Server docs - only
+            // arrives once the physical move fully completes. Awaiting MOVE before even starting
+            // the G1 meant the LED showed the ball at its new position well before the carriage
+            // physically got there - a visible "LED jumps ahead, ball catches up" lag, confirmed
+            // on real hardware.
+            var gcodeTask = SendGCodeAsync($"G1 X{posX:F1} Y{posY:F1} F{settings.StepFeedRateMmPerMin}");
+            var ledTask = SendCommandAsync($"MOVE {px} {py} {_rasterCorridor}");
+            await Task.WhenAll(gcodeTask, ledTask);
         }
 
         public async Task FlashWinnerAsync(string exitName)
@@ -502,8 +509,13 @@ namespace LuckyMaze.Infrastructure.Services
             // CLEAR blanks the grid, the dot and any text overlay on the Pico.
             await SendCommandAsync("CLEAR");
 
-            // Move stepper motors to safe park coordinates (0, 0)
-            await SendGCodeAsync($"G1 X0 Y0 F{settings.TravelFeedRateMmPerMin}");
+            // Park at the panel's center, not the hand-parked origin corner (0, 0). A round can
+            // end anywhere on the panel, and the corner is the single farthest point from most of
+            // it - confirmed on real hardware that yanking the magnet that far, that fast, can rip
+            // the steel ball off it entirely rather than dragging it along. The center is a
+            // shorter, more consistent distance from wherever a round naturally leaves the ball.
+            var (centerX, centerY) = PhysicalMm(PanelSize / 2, PanelSize / 2, settings);
+            await SendGCodeAsync($"G1 X{centerX:F1} Y{centerY:F1} F{settings.TravelFeedRateMmPerMin}");
         }
 
         public void Dispose()
