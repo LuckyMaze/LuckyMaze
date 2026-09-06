@@ -18,5 +18,8 @@ services:
       - "${Hardware__PicoPort:-/dev/ttyACM0}:${Hardware__PicoPort:-/dev/ttyACM0}"
     group_add:
       - "${Hardware__DialoutGroupId:-20}"
+      # klippy.sock is owned by whoever runs Klipper and their own primary group - dialout only
+      # covers the serial device, not this. See docs/deployment.md.
+      - "${Hardware__KlipperGroupId:-1000}"
     volumes:
       - "${Hardware__KlippySocketPath:-/home/lucky-user/printer_data/comms/klippy.sock}:${Hardware__KlippySocketPath:-/home/lucky-user/printer_data/comms/klippy.sock}"
