@@ -20,9 +20,9 @@ apt-get update
 apt-get install -y hostapd dnsmasq nftables
 
 echo "==> Making sure nothing starts until enable.sh runs"
+systemctl unmask hostapd 2>/dev/null || true
 systemctl stop hostapd dnsmasq 2>/dev/null || true
 systemctl disable hostapd dnsmasq 2>/dev/null || true
-systemctl unmask hostapd 2>/dev/null || true
 
 echo "==> Installing the static-address unit for $AP_IFACE (only runs while enabled)"
 cat > /etc/systemd/system/luckymaze-ap-address.service <<EOF
