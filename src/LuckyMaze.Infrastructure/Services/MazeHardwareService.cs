@@ -37,6 +37,8 @@ namespace LuckyMaze.Infrastructure.Services
         private readonly decimal _pixelPitchMm;
         private readonly decimal _originOffsetXMm;
         private readonly decimal _originOffsetYMm;
+        private readonly bool _invertX;
+        private readonly bool _invertY;
         private readonly int _stepFeedRate;
         private readonly int _travelFeedRate;
         private readonly int? _accelerationMmPerSec2;
@@ -71,6 +73,12 @@ namespace LuckyMaze.Infrastructure.Services
             // only calibration anchor available without endstops.
             _originOffsetXMm = configuration.GetValue<decimal>("Hardware:OriginOffsetXMm", 0m);
             _originOffsetYMm = configuration.GetValue<decimal>("Hardware:OriginOffsetYMm", 0m);
+            // Whether the carriage's physical axis points the same direction as the panel's raster
+            // coordinate increasing - depends entirely on this rig's CoreXY mounting/wiring, no way
+            // to know it in advance. Mirrored around the panel's own center rather than negated, so
+            // flipping this doesn't push the target outside the same physical travel range.
+            _invertX = configuration.GetValue<bool>("Hardware:InvertX", false);
+            _invertY = configuration.GetValue<bool>("Hardware:InvertY", false);
             _stepFeedRate = configuration.GetValue<int>("Hardware:StepFeedRateMmPerMin", 2400);
             _travelFeedRate = configuration.GetValue<int>("Hardware:TravelFeedRateMmPerMin", 3000);
             _accelerationMmPerSec2 = configuration.GetValue<int?>("Hardware:AccelerationMmPerSec2");
@@ -425,9 +433,12 @@ namespace LuckyMaze.Infrastructure.Services
         /// </summary>
         private (decimal X, decimal Y) PhysicalMm(int rasterX, int rasterY)
         {
+            int x = _invertX ? PanelSize - 1 - rasterX : rasterX;
+            int y = _invertY ? PanelSize - 1 - rasterY : rasterY;
+
             return (
-                _originOffsetXMm + rasterX * _pixelPitchMm,
-                _originOffsetYMm + rasterY * _pixelPitchMm);
+                _originOffsetXMm + x * _pixelPitchMm,
+                _originOffsetYMm + y * _pixelPitchMm);
         }
 
         /// <summary>

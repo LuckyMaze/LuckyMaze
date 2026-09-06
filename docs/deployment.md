@@ -76,6 +76,13 @@ that automatically. If the ball tracks consistently offset from the magnet by a 
 one direction, that's this alignment, not the pixel pitch: nudge `Hardware__OriginOffsetXMm` /
 `Hardware__OriginOffsetYMm` (mm) rather than re-parking the carriage by hand each time.
 
+It also can't know which direction this rig's axes actually point - that's down to the CoreXY
+mounting and wiring, and varies rig to rig. If the carriage moves the opposite direction from what
+the panel shows (confirmed by watching one axis at a time: does the carriage go right when the
+ball moves right?), set `Hardware__InvertX` and/or `Hardware__InvertY` to `true` for whichever axis
+is backwards. This mirrors the target around the panel's own center rather than negating it, so it
+stays within the same physical travel range instead of trying to go negative from the origin.
+
 ### Movement tuning
 
 If the ball moves too fast, too slow, or too jerkily, that's `Hardware__StepFeedRateMmPerMin`
