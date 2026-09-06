@@ -1,0 +1,20 @@
+# Additive overlay - only for the actual Raspberry Pi, with the Pico and Klipper's socket really
+# there. `compose.yml` alone runs the API in hardware-mock mode (commands are logged, not sent),
+# which is what you want anywhere else (a dev machine, CI, a staging host).
+#
+#   docker compose -f compose.yml -f compose.hardware.yml up -d
+#
+# See docs/deployment.md for what each of these actually is and how to find the values for your
+# host.
+services:
+  api:
+    environment:
+      Hardware__PicoPort: "${Hardware__PicoPort:-/dev/ttyACM0}"
+      Hardware__KlippySocketPath: "${Hardware__KlippySocketPath:-/home/lucky-user/printer_data/comms/klippy.sock}"
+      Hardware__CellSizeMm: "${Hardware__CellSizeMm:-30.0}"
+    devices:
+      - "${Hardware__PicoPort:-/dev/ttyACM0}:${Hardware__PicoPort:-/dev/ttyACM0}"
+    group_add:
+      - "${Hardware__DialoutGroupId:-20}"
+    volumes:
+      - "${Hardware__KlippySocketPath:-/home/lucky-user/printer_data/comms/klippy.sock}:${Hardware__KlippySocketPath:-/home/lucky-user/printer_data/comms/klippy.sock}"

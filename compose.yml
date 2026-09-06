@@ -1,0 +1,42 @@
+services:
+  db:
+    image: postgres:18.3
+    container_name: luckymaze-postgres
+    environment:
+      POSTGRES_DB: "${Postgres__Database:-luckymaze}"
+      POSTGRES_USER: "${Postgres__User:-luckymaze}"
+      POSTGRES_PASSWORD: "${Postgres__Password:-luckymaze}"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${Postgres__User:-luckymaze} -d ${Postgres__Database:-luckymaze}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - luckymaze-db:/var/lib/postgresql
+    restart: unless-stopped
+
+  api:
+    # Also buildable locally: `docker compose build` uses the block below instead of pulling.
+    image: ghcr.io/luckymaze/luckymaze-api:latest
+    build:
+      context: .
+      dockerfile: src/LuckyMaze.API/Dockerfile
+    container_name: luckymaze-api
+    ports:
+      - "${LuckyMaze__Port:-8080}:8080"
+    environment:
+      ConnectionStrings__LuckyMazeDatabase: "${ConnectionStrings__LuckyMazeDatabase:-Host=db;Port=5432;Database=${Postgres__Database:-luckymaze};Username=${Postgres__User:-luckymaze};Password=${Postgres__Password:-luckymaze}}"
+      LocalLogin__SigningKey: "${LocalLogin__SigningKey:?Set LocalLogin__SigningKey in .env - see docs/deployment.md}"
+      Cors__AllowedOrigins__0: "${Cors__AllowedOrigins__0:-http://localhost:4200}"
+      Oidc__Authority: "${Oidc__Authority:-}"
+      Oidc__ClientId: "${Oidc__ClientId:-luckymaze}"
+    env_file:
+      - path: .env
+        required: false
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  luckymaze-db:

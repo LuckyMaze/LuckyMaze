@@ -1,5 +1,5 @@
 using System.IO.Ports;
-using System.Net.Http.Json;
+using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Configuration;
@@ -19,15 +19,15 @@ namespace LuckyMaze.Infrastructure.Services
     {
         private const int PanelSize = 64;
 
-        private readonly IHttpClientFactory _httpClientFactory;
         private readonly ILogger<MazeHardwareService> _logger;
 
         private readonly string? _picoPortName;
-        private readonly string? _moonrakerUrl;
+        private readonly string? _klippySocketPath;
         private readonly decimal _cellSizeMm;
 
         private SerialPort? _serialPort;
         private bool _isSerialInitialized = false;
+        private int _klippyRequestId = 0;
 
         // The maze/raster transform (cell size in pixels and the offset that centers the maze on
         // the panel) is shared between InitializeAsync and ShowStepAsync, so both agree on where a
@@ -38,14 +38,12 @@ namespace LuckyMaze.Infrastructure.Services
 
         public MazeHardwareService(
             IConfiguration configuration,
-            IHttpClientFactory httpClientFactory,
             ILogger<MazeHardwareService> logger)
         {
-            _httpClientFactory = httpClientFactory;
             _logger = logger;
 
             _picoPortName = configuration["Hardware:PicoPort"];
-            _moonrakerUrl = configuration["Hardware:MoonrakerUrl"];
+            _klippySocketPath = configuration["Hardware:KlippySocketPath"];
             _cellSizeMm = configuration.GetValue<decimal>("Hardware:CellSizeMm", 30.0m);
 
             InitializeSerialPort();
@@ -122,32 +120,62 @@ namespace LuckyMaze.Infrastructure.Services
             }
         }
 
+        // Klipper's own docs (docs/API_Server.md, "gcode/script"): "The JSON response message is
+        // sent when the processing of the script fully completes" - a slow move genuinely holds the
+        // response, so the timeout has to be generous rather than snappy.
+        private static readonly TimeSpan KlippyRequestTimeout = TimeSpan.FromSeconds(30);
+
+        /// <summary>
+        /// Sends one G-code command straight to Klipper's own Unix domain socket API - no
+        /// Moonraker, no HTTP. This deployment runs plain Klipper on the same host as this
+        /// container, with the socket bind-mounted in (see the deployment docs in the repo root
+        /// README). The wire format is one JSON object per request/response, each terminated by a
+        /// single 0x03 (ETX) byte instead of a newline - see
+        /// https://github.com/Klipper3d/klipper/blob/master/docs/API_Server.md.
+        /// </summary>
         private async Task SendGCodeAsync(string gcode)
         {
-            if (string.IsNullOrWhiteSpace(_moonrakerUrl))
+            if (string.IsNullOrWhiteSpace(_klippySocketPath))
             {
-                _logger.LogInformation("[HARDWARE MOCK (Klipper GCode)] Executing: {GCode}", gcode);
+                _logger.LogInformation("[HARDWARE MOCK (Klipper socket)] Executing: {GCode}", gcode);
                 return;
             }
 
             try
             {
-                var client = _httpClientFactory.CreateClient();
-                var endpoint = $"{_moonrakerUrl.TrimEnd('/')}/printer/gcode/script";
-                var payload = new { script = gcode };
+                using var cts = new CancellationTokenSource(KlippyRequestTimeout);
+                using var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+                await socket.ConnectAsync(new UnixDomainSocketEndPoint(_klippySocketPath), cts.Token);
 
-                _logger.LogDebug("Sending G-Code to Moonraker: {GCode}", gcode);
-                var response = await client.PostAsJsonAsync(endpoint, payload);
-
-                if (!response.IsSuccessStatusCode)
+                var request = JsonSerializer.Serialize(new
                 {
-                    var errorMsg = await response.Content.ReadAsStringAsync();
-                    _logger.LogWarning("Moonraker API returned non-success status: {Code}. Details: {Details}", response.StatusCode, errorMsg);
-                }
+                    id = Interlocked.Increment(ref _klippyRequestId),
+                    method = "gcode/script",
+                    @params = new { script = gcode }
+                });
+
+                var payload = new byte[Encoding.UTF8.GetByteCount(request) + 1];
+                var written = Encoding.UTF8.GetBytes(request, payload);
+                payload[written] = 0x03;
+
+                await socket.SendAsync(payload, SocketFlags.None, cts.Token);
+
+                var buffer = new byte[4096];
+                var received = await socket.ReceiveAsync(buffer, SocketFlags.None, cts.Token);
+                var response = Encoding.UTF8.GetString(buffer, 0, received).TrimEnd('\x03');
+
+                _logger.LogDebug("Klipper response for '{GCode}': {Response}", gcode, response);
+
+                if (response.Contains("\"error\"", StringComparison.Ordinal))
+                    _logger.LogWarning("Klipper reported an error for '{GCode}': {Response}", gcode, response);
+            }
+            catch (OperationCanceledException)
+            {
+                _logger.LogWarning("Timed out waiting for Klipper to finish '{GCode}' (>{Timeout}s).", gcode, KlippyRequestTimeout.TotalSeconds);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to send G-Code command '{GCode}' to Klipper/Moonraker.", gcode);
+                _logger.LogError(ex, "Failed to send G-Code command '{GCode}' to Klipper via {SocketPath}.", gcode, _klippySocketPath);
             }
         }
 

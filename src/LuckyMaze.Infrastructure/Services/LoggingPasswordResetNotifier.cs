@@ -7,7 +7,7 @@ namespace LuckyMaze.Infrastructure.Services
     /// Toamaisutaa requires an <see cref="IPasswordResetNotifier"/> before local password login
     /// will start, and ships no implementation - sending mail is not its job. This project has no
     /// SMTP infrastructure, so the reset link is logged instead, the same way the hardware services
-    /// fall back to logging when no serial port or Moonraker URL is configured.
+    /// fall back to logging when no serial port or Klipper socket is configured.
     /// </summary>
     public class LoggingPasswordResetNotifier(ILogger<LoggingPasswordResetNotifier> logger) : IPasswordResetNotifier
     {
