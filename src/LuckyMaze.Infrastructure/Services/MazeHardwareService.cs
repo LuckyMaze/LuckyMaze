@@ -12,20 +12,23 @@ namespace LuckyMaze.Infrastructure.Services
     /// <summary>
     /// Talks to the LuckyMaze/LEDController firmware (a 64x64 HUB75 panel on a Raspberry Pi Pico).
     /// The panel's serial protocol is fixed size and request/response: CLEAR, GRID + 64 rows of 64
-    /// walkable/blocked cells, MOVE x y, COLOR and CENTER, each answered with one OK/ERR line. See
-    /// https://github.com/LuckyMaze/LEDController for the authoritative protocol.
+    /// walkable/blocked cells, MOVE x y [size], COLOR and CENTER, each answered with one OK/ERR
+    /// line. MOVE just places the dot (no pathfinding on the Pico's side - see move_dot_to in the
+    /// LEDController repo for why). See https://github.com/LuckyMaze/LEDController for the
+    /// authoritative protocol.
     /// </summary>
     public class MazeHardwareService : IMazeHardwareService, IDisposable
     {
         private const int PanelSize = 64;
 
-        // The Pico doesn't reply to MOVE until it finishes animating the dot along its own
-        // BFS path (code.py sleeps MOVE_DELAY = 20ms per pixel step). The very first MOVE after a
-        // GRID load can cover most of the panel - its internal dot defaults to the first walkable
-        // pixel, not the maze's actual start - so this has to be generous, not snappy. Too short a
-        // timeout doesn't just log a warning: the Pico still finishes and writes its response after
-        // we've given up reading it, and that stray line desyncs every reply after it.
-        private static readonly int PicoReadTimeoutMs = (int)TimeSpan.FromSeconds(15).TotalMilliseconds;
+        // MOVE just places the dot directly and redraws - no pathfinding or per-pixel animation
+        // on the Pico's side (that used to run a full BFS over the 64x64 grid on every MOVE,
+        // which could exhaust a Pico's RAM - see LuckyMaze/LEDController's move_dot_to). So this
+        // only needs to cover one command's round-trip, not a multi-second animation, but stays
+        // a bit generous: too short doesn't just log a warning, the Pico still finishes and
+        // writes its response after we've given up reading it, and that stray line desyncs every
+        // reply after it.
+        private static readonly int PicoReadTimeoutMs = (int)TimeSpan.FromSeconds(3).TotalMilliseconds;
 
         private readonly ILogger<MazeHardwareService> _logger;
 
@@ -37,10 +40,11 @@ namespace LuckyMaze.Infrastructure.Services
         private bool _isSerialInitialized = false;
         private int _klippyRequestId = 0;
 
-        // The maze/raster transform (cell size in pixels and the offset that centers the maze on
-        // the panel) is shared between InitializeAsync and ShowStepAsync, so both agree on where a
-        // given maze cell lands.
-        private int _rasterCellSize = 1;
+        // The maze/raster transform (pitch = cell + wall in pixels, corridor = cell interior size,
+        // and the offset that centers the maze on the panel) is shared between InitializeAsync and
+        // ShowStepAsync, so both agree on where a given maze cell lands.
+        private int _rasterPitch = 1;
+        private int _rasterCorridor = 1;
         private int _rasterOffsetX;
         private int _rasterOffsetY;
 
@@ -72,6 +76,13 @@ namespace LuckyMaze.Infrastructure.Services
                     NewLine = "\n",
                     ReadTimeout = PicoReadTimeoutMs,
                     WriteTimeout = 500,
+                    // CircuitPython's USB console only starts streaming output once DTR is
+                    // asserted - the same way a terminal app "opening" the port does. Without
+                    // this, every command still runs on the Pico (CLEAR genuinely clears, GRID
+                    // genuinely loads) but the reply never reaches the host, so every read times
+                    // out even though nothing actually failed. Confirmed against real hardware.
+                    DtrEnable = true,
+                    RtsEnable = true,
                 };
                 _serialPort.Open();
                 _isSerialInitialized = true;
@@ -197,6 +208,13 @@ namespace LuckyMaze.Infrastructure.Services
             await SendCommandAsync("CLEAR");
             await SendGridAsync(raster);
 
+            var exits = JsonSerializer.Deserialize<List<MazeExit>>(maze.Exits) ?? new();
+            foreach (var exit in exits)
+            {
+                var (ex, ey, ew, eh) = ExitRasterRect(exit, maze.Height);
+                await SendCommandAsync($"EXIT {ex} {ey} {ew} {eh}");
+            }
+
             // Active homing (G28) needs endstops that aren't configured on this rig, so the
             // carriage is parked at the physical origin by hand instead. Tell Klipper the current
             // position IS (0, 0) rather than asking it to home there - no motion, no endstops.
@@ -259,71 +277,141 @@ namespace LuckyMaze.Infrastructure.Services
             }
         }
 
+        // Wall thickness in pixels - matches the LEDController demo firmware's WALLT exactly, so
+        // the panel's geometry is pixel-for-pixel identical to it.
+        private const int WallThickness = 1;
+
         /// <summary>
         /// Rasterizes a Width x Height maze (walls on cell edges) into the Pico's fixed 64x64
-        /// walkable/blocked grid, scaling each maze cell to a block of pixels and drawing walls in
-        /// the spare pixels between blocks. A maze at the panel's native 64x64 resolution has no
-        /// spare pixels for walls, so every cell is simply shown as walkable floor.
+        /// walkable/blocked grid, using the same geometry as the LEDController demo firmware's
+        /// cell_block/link: each cell paints its own fixed-size floor block, the 1px gap between
+        /// every pair of cells defaults to wall, and is opened as a single shared slice only where
+        /// that specific pair is actually connected. Marking each cell's own edge independently
+        /// (the previous approach) double-draws a shared wall from both sides and, symmetrically,
+        /// widens a shared opening into floor from both sides too - nothing like the demo's crisp,
+        /// consistent corridor width.
         /// </summary>
         private bool[,] BuildRaster(int mazeWidth, int mazeHeight, List<MazeCell> cells)
         {
-            var raster = new bool[PanelSize, PanelSize]; // defaults to false (blocked)
+            var raster = new bool[PanelSize, PanelSize]; // defaults to false (blocked/wall)
 
             if (mazeWidth <= 0 || mazeHeight <= 0)
                 return raster;
 
-            var (cellSize, offsetX, offsetY) = ComputeRasterTransform(mazeWidth, mazeHeight);
-            _rasterCellSize = cellSize;
+            var (pitch, corridor, offsetX, offsetY) = ComputeRasterTransform(mazeWidth, mazeHeight);
+            _rasterPitch = pitch;
+            _rasterCorridor = corridor;
             _rasterOffsetX = offsetX;
             _rasterOffsetY = offsetY;
 
-            foreach (var cell in cells)
+            void PaintBlock(int blockX, int blockY, int width, int height)
             {
-                int blockX = offsetX + cell.X * cellSize;
-                int blockY = offsetY + cell.Y * cellSize;
-
-                for (int dy = 0; dy < cellSize; dy++)
+                for (int dy = 0; dy < height; dy++)
                 {
-                    for (int dx = 0; dx < cellSize; dx++)
+                    for (int dx = 0; dx < width; dx++)
                     {
                         int px = blockX + dx;
                         int py = blockY + dy;
-                        if (px < 0 || px >= PanelSize || py < 0 || py >= PanelSize)
-                            continue;
-
-                        // With no spare pixel between blocks (cellSize == 1) there is nowhere to
-                        // draw a wall, so every cell is walkable floor.
-                        bool isWallPixel = cellSize > 1 && (
-                            (dx == 0 && cell.West) ||
-                            (dx == cellSize - 1 && cell.East) ||
-                            (dy == 0 && cell.North) ||
-                            (dy == cellSize - 1 && cell.South));
-
-                        raster[px, py] = !isWallPixel;
+                        if (px >= 0 && px < PanelSize && py >= 0 && py < PanelSize)
+                            raster[px, py] = true;
                     }
                 }
+            }
+
+            foreach (var cell in cells)
+            {
+                // Each cell's own floor block, matching cell_block(): (c*P + WALLT, r*P + WALLT).
+                PaintBlock(
+                    offsetX + cell.X * pitch + WallThickness,
+                    offsetY + cell.Y * pitch + WallThickness,
+                    corridor, corridor);
+
+                // Open a single shared WALLT-wide slice toward the east/south neighbor when
+                // connected, matching link() - processed once per pair, from the lower-index side.
+                if (!cell.East && cell.X + 1 < mazeWidth)
+                {
+                    PaintBlock(
+                        offsetX + (cell.X + 1) * pitch,
+                        offsetY + cell.Y * pitch + WallThickness,
+                        WallThickness, corridor);
+                }
+
+                if (!cell.South && cell.Y + 1 < mazeHeight)
+                {
+                    PaintBlock(
+                        offsetX + cell.X * pitch + WallThickness,
+                        offsetY + (cell.Y + 1) * pitch,
+                        corridor, WallThickness);
+                }
+            }
+
+            if (_logger.IsEnabled(LogLevel.Debug))
+            {
+                int floorPixels = 0;
+                var sb = new StringBuilder();
+                for (int y = 0; y < PanelSize; y++)
+                {
+                    for (int x = 0; x < PanelSize; x++)
+                    {
+                        if (raster[x, y]) floorPixels++;
+                        sb.Append(raster[x, y] ? '.' : '#');
+                    }
+                    sb.Append('\n');
+                }
+                _logger.LogDebug(
+                    "Raster: {Floor}/{Total} floor pixels ({Pct:P0}), pitch={Pitch} corridor={Corridor} offset=({OffsetX},{OffsetY})\n{Ascii}",
+                    floorPixels, PanelSize * PanelSize, (double)floorPixels / (PanelSize * PanelSize),
+                    pitch, corridor, offsetX, offsetY, sb.ToString());
             }
 
             return raster;
         }
 
-        private static (int CellSize, int OffsetX, int OffsetY) ComputeRasterTransform(int mazeWidth, int mazeHeight)
+        private static (int Pitch, int Corridor, int OffsetX, int OffsetY) ComputeRasterTransform(int mazeWidth, int mazeHeight)
         {
             int longestSide = Math.Max(mazeWidth, mazeHeight);
-            int cellSize = Math.Max(1, PanelSize / longestSide);
+            int pitch = Math.Max(WallThickness + 1, PanelSize / longestSide);
+            int corridor = pitch - WallThickness;
 
-            int offsetX = (PanelSize - mazeWidth * cellSize) / 2;
-            int offsetY = (PanelSize - mazeHeight * cellSize) / 2;
+            // Matches the demo's GW = COLS * P + WALLT / OX = (64 - GW) / 2 - the extra WALLT
+            // accounts for the trailing wall after the last cell, so a maze that exactly fits (e.g.
+            // 21 cells at pitch 3) centers with zero leftover, same as the demo.
+            int griddedWidth = mazeWidth * pitch + WallThickness;
+            int griddedHeight = mazeHeight * pitch + WallThickness;
+            int offsetX = (PanelSize - griddedWidth) / 2;
+            int offsetY = (PanelSize - griddedHeight) / 2;
 
-            return (cellSize, offsetX, offsetY);
+            return (pitch, corridor, offsetX, offsetY);
         }
 
         private (int X, int Y) ToRasterCoords(int cellX, int cellY)
         {
-            int px = _rasterOffsetX + cellX * _rasterCellSize + _rasterCellSize / 2;
-            int py = _rasterOffsetY + cellY * _rasterCellSize + _rasterCellSize / 2;
+            int px = _rasterOffsetX + cellX * _rasterPitch + WallThickness + _rasterCorridor / 2;
+            int py = _rasterOffsetY + cellY * _rasterPitch + WallThickness + _rasterCorridor / 2;
 
             return (Math.Clamp(px, 0, PanelSize - 1), Math.Clamp(py, 0, PanelSize - 1));
+        }
+
+        /// <summary>
+        /// The rectangle to mark green for an exit cell - its own interior floor block, extended
+        /// by one wall's thickness toward whichever panel edge it opens onto, so the marker
+        /// visibly punches through the boundary wall instead of stopping at it. Matches
+        /// open_exit()/cell_block() in the LEDController demo firmware pixel-for-pixel.
+        /// </summary>
+        private (int X, int Y, int Width, int Height) ExitRasterRect(MazeExit exit, int mazeHeight)
+        {
+            int blockX = _rasterOffsetX + exit.X * _rasterPitch + WallThickness;
+            int blockY = _rasterOffsetY + exit.Y * _rasterPitch + WallThickness;
+
+            if (exit.Y == 0)
+                return (blockX, blockY - WallThickness, _rasterCorridor, _rasterCorridor + WallThickness);
+            if (exit.Y == mazeHeight - 1)
+                return (blockX, blockY, _rasterCorridor, _rasterCorridor + WallThickness);
+            if (exit.X == 0)
+                return (blockX - WallThickness, blockY, _rasterCorridor + WallThickness, _rasterCorridor);
+
+            // exit.X == mazeWidth - 1, the only remaining border MazeGenerator ever assigns.
+            return (blockX, blockY, _rasterCorridor + WallThickness, _rasterCorridor);
         }
 
         public async Task ShowStepAsync(int x, int y, Direction direction)
@@ -331,7 +419,7 @@ namespace LuckyMaze.Infrastructure.Services
             _logger.LogInformation("Pushed step to hardware: ({X}, {Y}) moving {Direction}", x, y, direction);
 
             var (px, py) = ToRasterCoords(x, y);
-            await SendCommandAsync($"MOVE {px} {py}");
+            await SendCommandAsync($"MOVE {px} {py} {_rasterCorridor}");
 
             decimal posX = x * _cellSizeMm;
             decimal posY = y * _cellSizeMm;
