@@ -161,7 +161,10 @@ namespace LuckyMaze.Infrastructure.Services
             await SendCommandAsync("CLEAR");
             await SendGridAsync(raster);
 
-            await SendGCodeAsync("G28"); // Home all axes
+            // Active homing (G28) needs endstops that aren't configured on this rig, so the
+            // carriage is parked at the physical origin by hand instead. Tell Klipper the current
+            // position IS (0, 0) rather than asking it to home there - no motion, no endstops.
+            await SendGCodeAsync("SET_KINEMATIC_POSITION X=0 Y=0 Z=0");
             await SendGCodeAsync("G90"); // Absolute positioning
 
             // Move the magnetic carriage to the center start cell.
