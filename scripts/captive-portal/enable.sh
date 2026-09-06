@@ -30,17 +30,24 @@ systemctl enable --now luckymaze-ap-address.service
 systemctl unmask hostapd 2>/dev/null || true
 systemctl enable --now hostapd dnsmasq
 
-echo "==> Redirecting HTTP from $AP_IFACE to the game on :$API_PORT, dropping HTTPS"
+echo "==> Redirecting HTTP from $AP_IFACE to the game on :$API_PORT, rejecting HTTPS"
 nft delete table ip luckymaze 2>/dev/null || true
 nft -f - <<EOF
 table ip luckymaze {
     chain prerouting {
         type nat hook prerouting priority -100;
         iifname "$AP_IFACE" tcp dport 80 redirect to :$API_PORT
-        # HTTPS can't be redirected without a certificate every phone already trusts - drop it
-        # instead of letting it hang, so the OS's connectivity check fails fast on HTTPS and falls
-        # back to the HTTP check, which does work. See docs/captive-portal.md.
-        iifname "$AP_IFACE" tcp dport 443 drop
+    }
+    chain input {
+        type filter hook input priority 0;
+        # HTTPS can't be redirected without a certificate every phone already trusts - reject it
+        # (TCP RST) rather than dropping it. A silent drop makes the OS's HTTPS connectivity check
+        # hang for a retransmission timeout instead of failing right away, and on some phones
+        # (seen: Samsung/One UI) that's long enough that the whole connectivity evaluation gives up
+        # before ever trying the HTTP check above - so the sign-in prompt never appears at all.
+        # This has to be a separate filter chain, not another rule in the nat chain above - reject
+        # isn't reliably supported inside nat-type chains. See docs/captive-portal.md.
+        iifname "$AP_IFACE" tcp dport 443 reject with tcp reset
     }
 }
 EOF
