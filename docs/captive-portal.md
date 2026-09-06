@@ -13,7 +13,7 @@ own, and the pieces below just make sure whatever they check lands on the game.
    SSID, open, no password.
 2. **dnsmasq** hands out DHCP leases to anyone who joins, and answers *every* DNS query - for any
    domain at all - with the Pi's own address (`192.168.4.1`).
-3. **nftables** redirects all port-80 traffic from the WiFi interface to the game, and drops
+3. **nftables** redirects all port-80 traffic from the WiFi interface to the game, and rejects
    port-443 outright.
 4. When a phone joins, its OS pings a specific URL to check for real internet - Apple checks
    `captive.apple.com/hotspot-detect.html`, Android checks
@@ -23,10 +23,12 @@ own, and the pieces below just make sure whatever they check lands on the game.
    "Success"/204/expected-text response the OS wanted, so it concludes there's a portal here and
    opens its built-in browser pointed at that same URL - which resolves to the Pi again, and shows
    the game.
-5. HTTPS is dropped rather than redirected, on purpose: there's no way to redirect an HTTPS
-   connectivity check without a certificate the phone already trusts, and letting it hang would
-   just make the OS wait before falling back. Dropping it fails fast, and every platform's
-   connectivity check already has an HTTP fallback for exactly this case.
+5. HTTPS is rejected (TCP RST) rather than redirected, on purpose: there's no way to redirect an
+   HTTPS connectivity check without a certificate the phone already trusts. It's a *reject*, not a
+   silent drop, so the phone's HTTPS attempt fails immediately instead of hanging for a
+   retransmission timeout - which matters, because some phones give up on the whole connectivity
+   evaluation (no sign-in prompt at all) if that first check just stalls instead of failing fast.
+   Every platform's connectivity check already has an HTTP fallback for exactly this case.
 
 This is the same mechanism airport and hotel WiFi portals use - nothing LuckyMaze-specific about
 steps 1-4, only step 4's *content* (the game itself) is.
