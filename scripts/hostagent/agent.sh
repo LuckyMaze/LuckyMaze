@@ -16,6 +16,9 @@ HOTSPOT_REVERT_TIMEOUT_SEC="${LUCKYMAZE_HOTSPOT_TIMEOUT_SEC:-600}"
 REVERT_PID_FILE="/run/luckymaze-hotspot-revert.pid"
 
 mkdir -p "$REQUEST_DIR"
+# World-writable: the API container runs as a non-root user with no shared group with this root
+# service, and the only thing trusted here is the filename (see the comment above), not who wrote it.
+chmod 777 "$REQUEST_DIR"
 
 cancel_pending_revert() {
   if [ -f "$REVERT_PID_FILE" ]; then
