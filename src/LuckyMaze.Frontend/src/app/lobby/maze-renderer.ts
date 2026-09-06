@@ -15,7 +15,7 @@ import { MazeExit } from '../api/model/mazeExit';
   selector: 'luckymaze-maze-renderer',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="relative mx-auto aspect-square w-full max-w-[150px] overflow-hidden rounded-xl border bg-card sm:max-w-[360px]">
+    <div class="relative mx-auto aspect-square w-full max-w-[150px] overflow-hidden border bg-card sm:max-w-[360px]">
       <canvas #mazeCanvas class="block size-full"></canvas>
     </div>
   `,
@@ -144,23 +144,34 @@ export class MazeRenderer implements AfterViewInit, OnDestroy {
     }
 
     // Exits - filled markers, the same solid-fill-plus-contrasting-text look as a default badge.
+    // Radius and label both scale down with cell size (same idea as wallWidth above) - "Exit A"
+    // drawn at a fixed size overflows a marker that's only a few pixels across on a packed 64x64
+    // maze, reading as an illegible smear rather than text.
     const exits = this.exits();
     if (exits) {
-      this.ctx.font = `600 12px ${theme.fontSans}`;
+      const radius = Math.max(3, Math.min(14, cellSize * 0.35));
+      const fontSize = Math.round(Math.max(6, Math.min(13, radius * 1.3)));
+      const showLabel = fontSize >= 8;
+
       this.ctx.textAlign = 'center';
       this.ctx.textBaseline = 'middle';
+      if (showLabel) this.ctx.font = `600 ${fontSize}px ${theme.fontSans}`;
+
       for (const exit of exits) {
         const cx = (exit.x + 0.5) * cellWidth;
         const cy = (exit.y + 0.5) * cellHeight;
-        const radius = Math.min(cellWidth, cellHeight) * 0.28;
 
         this.ctx.fillStyle = theme.foreground;
         this.ctx.beginPath();
         this.ctx.arc(cx, cy, radius, 0, Math.PI * 2);
         this.ctx.fill();
 
-        this.ctx.fillStyle = theme.background;
-        this.ctx.fillText(exit.name, cx, cy);
+        if (showLabel) {
+          // "Exit A" -> "A" - the letter is what needs to fit in the marker, not the full name.
+          const label = exit.name.trim().split(/\s+/).pop() ?? exit.name;
+          this.ctx.fillStyle = theme.background;
+          this.ctx.fillText(label, cx, cy);
+        }
       }
     }
 
