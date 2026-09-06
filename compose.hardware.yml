@@ -11,9 +11,10 @@ services:
     environment:
       Hardware__PicoPort: "${Hardware__PicoPort:-/dev/ttyACM0}"
       Hardware__KlippySocketPath: "${Hardware__KlippySocketPath:-/home/lucky-user/printer_data/comms/klippy.sock}"
-      Hardware__PixelPitchMm: "${Hardware__PixelPitchMm:-3.0}"
-      Hardware__OriginOffsetXMm: "${Hardware__OriginOffsetXMm:-0.0}"
-      Hardware__OriginOffsetYMm: "${Hardware__OriginOffsetYMm:-0.0}"
+      # Pixel pitch, origin offset, axis inversion, feed rates and acceleration all live in
+      # GameSettings now (admin panel), not here - they're per-rig physical calibration with no
+      # reason to need a restart to change, unlike these two paths and the group IDs below, which
+      # are tied to this container's actual device/volume mounts.
     devices:
       - "${Hardware__PicoPort:-/dev/ttyACM0}:${Hardware__PicoPort:-/dev/ttyACM0}"
     group_add:

@@ -34,7 +34,68 @@
         <input type="number" step="1" hlmInput formControlName="maxBet" class="w-full">
         <p class="text-sm text-muted-foreground">The largest bet allowed.</p>
       </div>
-      
+
+    </div>
+
+    <div hlmCardHeader class="px-6 pt-0">
+      <h2 class="text-xl font-semibold">Carriage Calibration</h2>
+      <p hlmCardDescription>Physical tuning for the magnet under the panel. Takes effect on the next round - no restart needed.</p>
+    </div>
+
+    <div hlmCardContent class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+      <div class="space-y-2">
+        <label hlmLabel>Pixel Pitch (mm)</label>
+        <input type="number" step="0.1" hlmInput formControlName="pixelPitchMm" class="w-full">
+        <p class="text-sm text-muted-foreground">Distance between LED centers - 3.0 for a Waveshare P3 64x64.</p>
+      </div>
+
+      <div class="space-y-2">
+        <label hlmLabel>Acceleration (mm/s²)</label>
+        <input type="number" step="1" hlmInput formControlName="accelerationMmPerSec2" class="w-full">
+        <p class="text-sm text-muted-foreground">Leave blank to use Klipper's own printer.cfg limit.</p>
+      </div>
+
+      <div class="space-y-2">
+        <label hlmLabel>Origin Offset X (mm)</label>
+        <input type="number" step="0.1" hlmInput formControlName="originOffsetXMm" class="w-full">
+        <p class="text-sm text-muted-foreground">Nudges the hand-parked origin to line up with the panel's top-left pixel.</p>
+      </div>
+
+      <div class="space-y-2">
+        <label hlmLabel>Origin Offset Y (mm)</label>
+        <input type="number" step="0.1" hlmInput formControlName="originOffsetYMm" class="w-full">
+        <p class="text-sm text-muted-foreground">Same as X, for the vertical axis.</p>
+      </div>
+
+      <div class="space-y-2">
+        <label hlmLabel>Step Feed Rate (mm/min)</label>
+        <input type="number" step="1" hlmInput formControlName="stepFeedRateMmPerMin" class="w-full">
+        <p class="text-sm text-muted-foreground">Speed for each single-cell move during a round.</p>
+      </div>
+
+      <div class="space-y-2">
+        <label hlmLabel>Travel Feed Rate (mm/min)</label>
+        <input type="number" step="1" hlmInput formControlName="travelFeedRateMmPerMin" class="w-full">
+        <p class="text-sm text-muted-foreground">Speed for the move to the maze's start and the return-to-origin park.</p>
+      </div>
+
+      <div class="flex items-center justify-between rounded-lg border p-3">
+        <div class="space-y-0.5">
+          <label hlmLabel>Invert X</label>
+          <p class="text-sm text-muted-foreground">On if the carriage moves opposite the panel on this axis.</p>
+        </div>
+        <hlm-switch formControlName="invertX" />
+      </div>
+
+      <div class="flex items-center justify-between rounded-lg border p-3">
+        <div class="space-y-0.5">
+          <label hlmLabel>Invert Y</label>
+          <p class="text-sm text-muted-foreground">On if the carriage moves opposite the panel on this axis.</p>
+        </div>
+        <hlm-switch formControlName="invertY" />
+      </div>
+
     </div>
 
     <div hlmCardFooter class="justify-end">

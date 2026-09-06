@@ -64,37 +64,34 @@ have homed, it instead sends `SET_KINEMATIC_POSITION X=0 Y=0 Z=0` - telling Klip
 current, hand-parked position **is** the origin, which needs no motion and no sensors. Park the
 carriage there physically before starting a round.
 
-### Aligning the carriage with the panel
+### Carriage calibration - all live, in the admin panel
 
-The magnet's target position is derived straight from the same LED panel pixel the ball is shown
-at - `Hardware__PixelPitchMm` (3.0 for a Waveshare P3 64x64) is the only thing converting a pixel
-into a physical distance, so the two are always in step with each other regardless of maze size.
+Pixel pitch, origin offset, axis inversion, feed rates and acceleration all live in `GameSettings`
+now (the admin panel, alongside maze size and bet limits) - not `.env`. They're per-rig physical
+tuning, not container infrastructure, so there's no reason they should need a restart or a
+redeploy to change; a save takes effect starting with the next round.
 
-What it can't know on its own is exactly where the hand-parked "origin" (see Homing above) sits
-relative to the panel's own top-left corner underneath it - there are no endstops to calibrate
-that automatically. If the ball tracks consistently offset from the magnet by a fixed amount in
-one direction, that's this alignment, not the pixel pitch: nudge `Hardware__OriginOffsetXMm` /
-`Hardware__OriginOffsetYMm` (mm) rather than re-parking the carriage by hand each time.
+- **Pixel Pitch (mm)** - the magnet's target position is derived straight from the same LED panel
+  pixel the ball is shown at; this is the only thing converting a pixel into a physical distance,
+  so the two stay in step regardless of maze size. 3.0 for a Waveshare P3 64x64.
+- **Origin Offset X/Y (mm)** - there are no endstops (see Homing above), so "origin" is wherever
+  the carriage was hand-parked, and there's no automatic way to know if that lines up with the
+  panel's own top-left pixel underneath it. If the ball tracks consistently offset from the magnet
+  by a fixed amount in one direction, nudge this rather than re-parking the carriage by hand.
+- **Invert X/Y** - which direction this rig's axes actually point is down to the CoreXY mounting
+  and wiring, and varies rig to rig. If the carriage moves the opposite direction from what the
+  panel shows (confirmed by watching one axis at a time: does the carriage go right when the ball
+  moves right?), turn on Invert for whichever axis is backwards. This mirrors the target around the
+  panel's own center rather than negating it, so it stays within the same physical travel range
+  instead of trying to go negative from the origin.
+- **Step / Travel Feed Rate (mm/min)** - speed for each single-cell move during a round, and for
+  the initial move to the maze's start plus the return-to-origin park, respectively. Sent straight
+  through as the G-code's `F` value.
+- **Acceleration (mm/s²)** - leave blank to use Klipper's own `printer.cfg` limit, or set a value
+  to override it via `M204` without touching `printer.cfg` on the Pi directly.
 
-It also can't know which direction this rig's axes actually point - that's down to the CoreXY
-mounting and wiring, and varies rig to rig. If the carriage moves the opposite direction from what
-the panel shows (confirmed by watching one axis at a time: does the carriage go right when the
-ball moves right?), set `Hardware__InvertX` and/or `Hardware__InvertY` to `true` for whichever axis
-is backwards. This mirrors the target around the panel's own center rather than negating it, so it
-stays within the same physical travel range instead of trying to go negative from the origin.
-
-### Movement tuning
-
-If the ball moves too fast, too slow, or too jerkily, that's `Hardware__StepFeedRateMmPerMin`
-(speed for each single-cell move during a round) and `Hardware__TravelFeedRateMmPerMin` (speed for
-the initial move to the maze's start and the return-to-origin park). Both are plain feed rates in
-mm/min, sent straight through as the G-code's `F` value - no redeploy needed to retune, just an
-`.env` change and a restart.
-
-Acceleration comes from Klipper's own `printer.cfg` by default. Set
-`Hardware__AccelerationMmPerSec2` to override it via `M204` instead - useful for tuning without
-touching `printer.cfg` on the Pi directly, but it only takes effect from the next round's
-`InitializeAsync` onward, not retroactively.
+`Hardware__PicoPort`/`KlippySocketPath`/the two group IDs above stay in `.env` - those really are
+tied to this container's device/volume mounts, so changing them does need a restart.
 
 ## `.env` overrides everything
 
