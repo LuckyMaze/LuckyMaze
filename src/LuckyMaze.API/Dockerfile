@@ -1,5 +1,14 @@
-# Build context is the repository root, because LuckyMaze.API references the other three
-# projects under src/ - restore needs all of their .csproj files present, not just this one.
+# Build context is the repository root, because LuckyMaze.API references the other three .NET
+# projects under src/ - restore needs all of their .csproj files present, not just this one - and
+# because the frontend stage below needs src/LuckyMaze.Frontend too.
+
+ARG BUN_VERSION=1.3.13
+FROM oven/bun:${BUN_VERSION} AS frontend-build
+WORKDIR /src/frontend
+COPY src/LuckyMaze.Frontend/package.json src/LuckyMaze.Frontend/bun.lock ./
+RUN bun install --frozen-lockfile
+COPY src/LuckyMaze.Frontend .
+RUN bun run build
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS base
 USER $APP_UID
@@ -28,5 +37,9 @@ RUN dotnet publish "LuckyMaze.API.csproj" -c $BUILD_CONFIGURATION -o /app/publis
 
 FROM base AS final
 WORKDIR /app
+ENV ASPNETCORE_ENVIRONMENT=Production
 COPY --from=publish /app/publish .
+# Angular's build always nests the actual static output one level down, under browser/ - see
+# https://angular.dev/tools/cli/build-system-migration.
+COPY --from=frontend-build /src/frontend/dist/LuckyMaze.Frontend/browser ./wwwroot
 ENTRYPOINT ["dotnet", "LuckyMaze.API.dll"]
