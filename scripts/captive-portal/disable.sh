@@ -13,15 +13,15 @@ if [ "$EUID" -ne 0 ]; then
 fi
 
 echo "==> Stopping hostapd/dnsmasq/nginx and the static address"
-systemctl disable --now hostapd dnsmasq nginx 2>/dev/null || true
-systemctl disable --now luckymaze-ap-address.service 2>/dev/null || true
+systemctl stop hostapd dnsmasq nginx 2>/dev/null || true
+systemctl stop luckymaze-ap-address.service 2>/dev/null || true
 
 echo "==> Removing the HTTPS-reject rule"
 nft delete table ip luckymaze 2>/dev/null || true
 rm -f /etc/nftables.d/luckymaze-captive-portal.nft
 
 echo "==> Giving $AP_IFACE back to NetworkManager"
-rm -f /etc/NetworkManager/conf.d/unmanaged-luckymaze-ap.conf
+rm -f /run/NetworkManager/conf.d/unmanaged-luckymaze-ap.conf /etc/NetworkManager/conf.d/unmanaged-luckymaze-ap.conf
 ip addr flush dev "$AP_IFACE" 2>/dev/null || true
 systemctl restart NetworkManager
 
