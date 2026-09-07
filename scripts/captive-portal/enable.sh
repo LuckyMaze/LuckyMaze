@@ -17,18 +17,23 @@ if [ "$EUID" -ne 0 ]; then
   exit 1
 fi
 
-echo "==> Telling NetworkManager to leave $AP_IFACE alone"
-mkdir -p /etc/NetworkManager/conf.d
-cat > /etc/NetworkManager/conf.d/unmanaged-luckymaze-ap.conf <<EOF
+echo "==> Telling NetworkManager to leave $AP_IFACE alone (this boot only)"
+# /run, not /etc: NetworkManager reads conf.d from both, but /run is tmpfs - cleared on every
+# reboot. Everything below is started, not enabled, for the same reason: a reboot must always come
+# back on normal WiFi, even if this hotspot was made "permanent" (which only means "skip the
+# software auto-revert timer while running", not "survive a power cycle stuck in AP mode forever" -
+# a physical cabinet that can lose power unexpectedly needs to stay recoverable from the network).
+mkdir -p /run/NetworkManager/conf.d
+cat > /run/NetworkManager/conf.d/unmanaged-luckymaze-ap.conf <<EOF
 [keyfile]
 unmanaged-devices=interface-name:$AP_IFACE
 EOF
 systemctl restart NetworkManager
 
 echo "==> Bringing up the static address and starting hostapd/dnsmasq"
-systemctl enable --now luckymaze-ap-address.service
+systemctl start luckymaze-ap-address.service
 systemctl unmask hostapd 2>/dev/null || true
-systemctl enable --now hostapd dnsmasq
+systemctl start hostapd dnsmasq
 
 echo "==> Pointing nginx's captive-portal redirect at :$API_PORT and starting it"
 cat > /etc/nginx/sites-available/luckymaze-captive-portal.conf <<EOF
@@ -39,7 +44,6 @@ server {
 }
 EOF
 nginx -t
-systemctl enable nginx
 systemctl restart nginx
 
 echo "==> Rejecting HTTPS on $AP_IFACE"
