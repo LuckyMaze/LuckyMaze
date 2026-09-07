@@ -14,8 +14,11 @@ CAPTIVE_PORTAL_DIR="$(cd "$SCRIPT_DIR/../captive-portal" && pwd)"
 REQUEST_DIR="${LUCKYMAZE_HOSTAGENT_DIR:-/home/lucky-user/hostagent/requests}"
 HOTSPOT_REVERT_TIMEOUT_SEC="${LUCKYMAZE_HOTSPOT_TIMEOUT_SEC:-600}"
 REVERT_PID_FILE="/run/luckymaze-hotspot-revert.pid"
+# Unlike the PID file above, this has to survive a reboot - it's how a pending revert resumes
+# after one, instead of a reboot mid-window silently turning a temporary hotspot into a stuck one.
+REVERT_DEADLINE_FILE="/var/lib/luckymaze/hotspot-revert-deadline"
 
-mkdir -p "$REQUEST_DIR"
+mkdir -p "$REQUEST_DIR" "$(dirname "$REVERT_DEADLINE_FILE")"
 # World-writable: the API container runs as a non-root user with no shared group with this root
 # service, and the only thing trusted here is the filename (see the comment above), not who wrote it.
 chmod 777 "$REQUEST_DIR"
@@ -25,18 +28,39 @@ cancel_pending_revert() {
     kill "$(cat "$REVERT_PID_FILE")" 2>/dev/null || true
     rm -f "$REVERT_PID_FILE"
   fi
+  rm -f "$REVERT_DEADLINE_FILE"
+}
+
+wait_and_revert() {
+  local delay="$1"
+  (
+    sleep "$delay"
+    echo "Auto-reverting hotspot after ${delay}s with no confirmation."
+    bash "$CAPTIVE_PORTAL_DIR/disable.sh"
+    rm -f "$REVERT_PID_FILE" "$REVERT_DEADLINE_FILE"
+  ) &
+  echo $! > "$REVERT_PID_FILE"
 }
 
 schedule_revert() {
   cancel_pending_revert
-  (
-    sleep "$HOTSPOT_REVERT_TIMEOUT_SEC"
-    echo "Auto-reverting hotspot after ${HOTSPOT_REVERT_TIMEOUT_SEC}s with no confirmation."
-    bash "$CAPTIVE_PORTAL_DIR/disable.sh"
-    rm -f "$REVERT_PID_FILE"
-  ) &
-  echo $! > "$REVERT_PID_FILE"
+  echo "$(( $(date +%s) + HOTSPOT_REVERT_TIMEOUT_SEC ))" > "$REVERT_DEADLINE_FILE"
+  wait_and_revert "$HOTSPOT_REVERT_TIMEOUT_SEC"
 }
+
+# Resume a pending revert left over from before a restart (service restart or full reboot) -
+# without this, whatever killed the old process also silently cancels the safety net.
+if [ -f "$REVERT_DEADLINE_FILE" ]; then
+  remaining=$(( $(cat "$REVERT_DEADLINE_FILE") - $(date +%s) ))
+  if [ "$remaining" -le 0 ]; then
+    echo "Resuming an overdue hotspot revert from before a restart - reverting now."
+    bash "$CAPTIVE_PORTAL_DIR/disable.sh"
+    rm -f "$REVERT_DEADLINE_FILE"
+  else
+    echo "Resuming a pending hotspot revert from before a restart (${remaining}s left)."
+    wait_and_revert "$remaining"
+  fi
+fi
 
 echo "LuckyMaze host agent watching $REQUEST_DIR"
 
