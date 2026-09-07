@@ -4,7 +4,7 @@
     <p hlmCardDescription>Configure global game settings. These settings will apply to the next generated maze.</p>
   </div>
 
-  <form [formGroup]="settingsForm" (ngSubmit)="saveSettings()">
+  <form [formGroup]="settingsForm" (ngSubmit)="saveSettings()" class="flex flex-col gap-6">
     <div hlmCardContent class="grid grid-cols-1 md:grid-cols-2 gap-6">
 
       <div class="space-y-2">
@@ -27,7 +27,7 @@
 
     </div>
 
-    <div class="px-6 py-2">
+    <div class="px-6">
       <hlm-separator />
     </div>
 
