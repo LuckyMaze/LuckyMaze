@@ -12,6 +12,7 @@ services:
       Hardware__PicoPort: "${Hardware__PicoPort:-/dev/ttyACM0}"
       Hardware__KlippySocketPath: "${Hardware__KlippySocketPath:-/home/lucky-user/printer_data/comms/klippy.sock}"
       Hardware__HostAgentRequestPath: "${Hardware__HostAgentRequestPath:-/hostagent/requests}"
+      Hardware__StateDirectory: "${Hardware__StateDirectory:-/state}"
       # Pixel pitch, origin offset, axis inversion, feed rates and acceleration all live in
       # GameSettings now (admin panel), not here - they're per-rig physical calibration with no
       # reason to need a restart to change, unlike these paths and the group IDs below, which are
@@ -29,3 +30,7 @@ services:
       # the agent (running outside Docker, with the privilege the container doesn't have) picks
       # them up and performs the actual shutdown/network-mode change. See docs/deployment.md.
       - "${Hardware__HostAgentRequestPathHost:-/home/lucky-user/hostagent/requests}:/hostagent/requests"
+      # Survives a container recreate, unlike the container's own filesystem - holds the
+      # carriage-at-home marker that tells the next boot whether it's actually safe to trust the
+      # carriage's current position as (0, 0). See docs/deployment.md.
+      - "${Hardware__StateDirectoryHost:-/home/lucky-user/luckymaze-state}:/state"

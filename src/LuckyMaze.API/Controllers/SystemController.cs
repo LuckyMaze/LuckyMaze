@@ -15,10 +15,20 @@ namespace LuckyMaze.API.Controllers
         [ProducesResponseType(StatusCodes.Status202Accepted)]
         public async Task<IActionResult> Shutdown()
         {
-            // Park the carriage safely before the host agent cuts power - the same center-park
-            // G-code a normal round reset uses, over the already-open Klipper connection.
-            await hardwareService.ResetAsync();
+            // Parks at the true origin (not the panel center a normal round reset uses) and marks
+            // it as safe to trust on the next boot - see PrepareForShutdownAsync.
+            await hardwareService.PrepareForShutdownAsync();
             await hostAgent.RequestShutdownAsync();
+            return Accepted();
+        }
+
+        [HttpPost("sethome")]
+        [ProducesResponseType(StatusCodes.Status202Accepted)]
+        public async Task<IActionResult> SetHome()
+        {
+            // No motion - this rig has no endstops. Trusts the operator has actually hand-parked
+            // the carriage at the true origin before calling this. See docs/deployment.md.
+            await hardwareService.EstablishHomeAsync();
             return Accepted();
         }
 

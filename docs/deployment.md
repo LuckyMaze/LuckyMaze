@@ -55,6 +55,7 @@ That overlay adds these to the `api` service, all pointed at paths on this same 
 | `group_add: - $KlipperGroupId` | `1000` | `klippy.sock` is owned by whoever runs Klipper and **their own primary group** - not `dialout`, which only covers the serial device. Confirm with `id <that-user>` (the `gid=` number). Get this wrong and it fails quietly: the panel and betting both work fine, the carriage just never moves, and the API log shows `SocketException (13): Permission denied` on every G-code send. |
 | `volumes: - $KlippySocketPath:$KlippySocketPath` | `/home/lucky-user/printer_data/comms/klippy.sock` | Bind-mounts Klipper's own Unix domain socket API straight into the container. **There is no Moonraker in this deployment** - the API talks to `gcode/script` on this socket directly, per [Klipper's API_Server docs](https://github.com/Klipper3d/klipper/blob/master/docs/API_Server.md). Find the real path with `systemctl cat klipper \| grep ExecStart` (the `-a` argument). |
 | `volumes: - $HostAgentRequestPathHost:/hostagent/requests` | `/home/lucky-user/hostagent/requests` | Shared with the host agent (below) - the API writes a request file here, the agent picks it up and performs the actual privileged action. |
+| `volumes: - $StateDirectoryHost:/state` | `/home/lucky-user/luckymaze-state` | Holds the carriage-at-home marker - has to survive a container recreate, unlike the container's own filesystem, since that's exactly the boundary it's meant to detect. See [Homing](#homing) below. |
 
 ### Host agent - shutdown and network mode from the admin panel
 
@@ -80,10 +81,21 @@ Override any of these in `.env` if your paths differ - see `.env.example`.
 
 ### Homing
 
-This rig has no endstops configured, so the API never sends `G28`. On the same schedule it would
-have homed, it instead sends `SET_KINEMATIC_POSITION X=0 Y=0 Z=0` - telling Klipper the carriage's
-current, hand-parked position **is** the origin, which needs no motion and no sensors. Park the
-carriage there physically before starting a round.
+This rig has no endstops configured, so the API never sends `G28`. Establishing the origin instead
+means sending `SET_KINEMATIC_POSITION X=0 Y=0 Z=0` - telling Klipper the carriage's current,
+hand-parked position **is** the origin, which needs no motion and no sensors.
+
+This only needs to happen once, not before every round - a normal shutdown (the admin panel's
+**Shut Down** button) already parks at that exact origin before cutting power and leaves a marker
+behind, so the next boot re-establishes it automatically before the first round starts. That marker
+lives in a bind-mounted directory (`Hardware:StateDirectory`) specifically because it has to survive
+a container recreate, not just a Pi reboot - an ordinary redeploy restarts the API container without
+touching the carriage at all, and auto-homing then (there's no marker, since nothing shut down
+cleanly) would silently declare whatever the carriage was last doing mid-round as the new origin.
+
+If the carriage's position ever looks wrong - first-ever setup, a crash instead of a clean shutdown,
+someone moved it by hand - hand-park it at the true physical origin and use the admin panel's
+**Set Current Position as Home** under System. Same command, no marker check, just trusts you.
 
 ### Carriage calibration - all live, in the admin panel
 

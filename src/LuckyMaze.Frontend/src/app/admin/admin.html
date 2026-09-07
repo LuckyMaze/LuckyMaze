@@ -105,7 +105,7 @@
 
   <div hlmCardHeader class="px-6 pt-0">
     <h2 class="text-xl font-semibold">System</h2>
-    <p hlmCardDescription>Actions on the Raspberry Pi itself - both need physical access to undo if something goes wrong.</p>
+    <p hlmCardDescription>Actions on the Raspberry Pi itself - the network toggle and shutdown both need physical access to undo if something goes wrong.</p>
   </div>
 
   <div hlmCardContent class="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -124,8 +124,14 @@
     </div>
 
     <div class="space-y-2">
+      <label hlmLabel>Homing</label>
+      <p class="text-sm text-muted-foreground">This rig has no endstops - hand-park the carriage at the true physical origin first, then use this to tell it that's (0, 0). No motion happens. Only needed if the carriage's position looks wrong (a clean shutdown already does this automatically on the next start).</p>
+      <button type="button" hlmBtn variant="outline" (click)="setHome()">Set Current Position as Home</button>
+    </div>
+
+    <div class="space-y-2">
       <label hlmLabel>Power</label>
-      <p class="text-sm text-muted-foreground">Parks the carriage, then shuts down the Pi. It needs to be physically powered back on.</p>
+      <p class="text-sm text-muted-foreground">Parks the carriage at the true origin, then shuts down the Pi. It needs to be physically powered back on - it'll pick up from there automatically next time.</p>
       <button type="button" hlmBtn variant="destructive" (click)="shutdown()">Shut Down</button>
     </div>
 

@@ -97,6 +97,17 @@ export class AdminComponent implements OnInit {
     });
   }
 
+  setHome() {
+    if (!confirm('Declare the carriage\'s CURRENT position as home (0, 0)? No motion happens - only do this if you\'ve just hand-parked it at the true physical origin.')) {
+      return;
+    }
+
+    this.systemService.apiSystemSethomePost().subscribe({
+      next: () => toast.success('Current position set as home.'),
+      error: () => toast.error('Failed to set home')
+    });
+  }
+
   enableHotspot() {
     const permanentNote = this.makeHotspotPermanent
       ? ''
