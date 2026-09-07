@@ -1,11 +1,10 @@
-import { ChangeDetectionStrategy, Component, computed, inject, OnInit } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject, OnInit } from '@angular/core';
 import { Router, RouterLink, RouterLinkActive } from '@angular/router';
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import {
   lucideGamepad2,
   lucideTrophy,
   lucideHistory,
-  lucideSettings,
   lucideCircleUser,
   lucideLogOut,
   lucideSun,
@@ -31,7 +30,6 @@ import { UserStore } from '../../stores/UserStore.store';
       lucideGamepad2,
       lucideTrophy,
       lucideHistory,
-      lucideSettings,
       lucideCircleUser,
       lucideLogOut,
       lucideSun,
@@ -54,8 +52,6 @@ export class BottomNav implements OnInit {
 
   protected readonly themeMode = this.theme.mode;
   protected readonly themeOptions = THEME_OPTIONS;
-
-  protected readonly isAdmin = computed(() => this.userStore.currentUser()?.role === 'Admin');
 
   protected setTheme(mode: (typeof THEME_OPTIONS)[number]['mode']): void {
     this.theme.set(mode);

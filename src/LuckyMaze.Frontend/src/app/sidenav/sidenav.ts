@@ -11,7 +11,6 @@ import {
   lucideGamepad2,
   lucideTrophy,
   lucideHistory,
-  lucideSettings,
 } from '@ng-icons/lucide';
 import { ThemeService, ThemeMode, THEME_OPTIONS } from '../shared/services/theme.service';
 import { HlmSidebarImports, HlmSidebarService } from '@spartan-ng/helm/sidebar';
@@ -34,7 +33,6 @@ import { AuthService } from '../shared/auth/auth.service';
       lucideGamepad2,
       lucideTrophy,
       lucideHistory,
-      lucideSettings,
     }),
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -62,10 +60,6 @@ export class Sidenav implements OnInit {
       email: u?.email ?? '',
       avatar: u?.avatarUrl ?? '',
     };
-  });
-
-  protected readonly isAdmin = computed(() => {
-    return this.userStore.currentUser()?.role === 'Admin';
   });
 
   protected setTheme(mode: ThemeMode): void {

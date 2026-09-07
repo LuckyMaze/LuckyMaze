@@ -11,17 +11,18 @@ import { HlmButtonImports } from '@spartan-ng/helm/button';
 import { HlmLabelImports } from '@spartan-ng/helm/label';
 import { HlmCardImports } from '@spartan-ng/helm/card';
 import { HlmSwitchImports } from '@spartan-ng/helm/switch';
+import { HlmSeparatorImports } from '@spartan-ng/helm/separator';
 
 @Component({
   selector: 'app-admin',
-  standalone: true,
   imports: [
     ReactiveFormsModule,
     HlmInputImports,
     HlmButtonImports,
     HlmLabelImports,
     HlmCardImports,
-    HlmSwitchImports
+    HlmSwitchImports,
+    HlmSeparatorImports,
   ],
   templateUrl: './admin.html',
 })
