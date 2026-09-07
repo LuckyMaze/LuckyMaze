@@ -15,14 +15,14 @@ if [ "$EUID" -ne 0 ]; then
   exit 1
 fi
 
-echo "==> Installing hostapd, dnsmasq, nftables"
+echo "==> Installing hostapd, dnsmasq, nftables, nginx"
 apt-get update
-apt-get install -y hostapd dnsmasq nftables
+apt-get install -y hostapd dnsmasq nftables nginx
 
 echo "==> Making sure nothing starts until enable.sh runs"
 systemctl unmask hostapd 2>/dev/null || true
-systemctl stop hostapd dnsmasq 2>/dev/null || true
-systemctl disable hostapd dnsmasq 2>/dev/null || true
+systemctl stop hostapd dnsmasq nginx 2>/dev/null || true
+systemctl disable hostapd dnsmasq nginx 2>/dev/null || true
 
 echo "==> Installing the static-address unit for $AP_IFACE (only runs while enabled)"
 cat > /etc/systemd/system/luckymaze-ap-address.service <<EOF
@@ -55,6 +55,11 @@ fi
 
 echo "==> Installing dnsmasq config (drop-in - doesn't touch anything else using dnsmasq)"
 install -m 644 "$SCRIPT_DIR/dnsmasq.conf" /etc/dnsmasq.d/luckymaze.conf
+
+echo "==> Installing the nginx captive-portal redirect, replacing the default site"
+rm -f /etc/nginx/sites-enabled/default
+install -m 644 "$SCRIPT_DIR/nginx-captive-portal.conf" /etc/nginx/sites-available/luckymaze-captive-portal.conf
+ln -sf /etc/nginx/sites-available/luckymaze-captive-portal.conf /etc/nginx/sites-enabled/luckymaze-captive-portal.conf
 
 echo
 echo "Install done. Nothing is running yet - use enable.sh (or the admin panel's network mode"

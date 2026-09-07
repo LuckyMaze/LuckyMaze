@@ -12,11 +12,11 @@ if [ "$EUID" -ne 0 ]; then
   exit 1
 fi
 
-echo "==> Stopping hostapd/dnsmasq and the static address"
-systemctl disable --now hostapd dnsmasq 2>/dev/null || true
+echo "==> Stopping hostapd/dnsmasq/nginx and the static address"
+systemctl disable --now hostapd dnsmasq nginx 2>/dev/null || true
 systemctl disable --now luckymaze-ap-address.service 2>/dev/null || true
 
-echo "==> Removing the port-80 redirect"
+echo "==> Removing the HTTPS-reject rule"
 nft delete table ip luckymaze 2>/dev/null || true
 rm -f /etc/nftables.d/luckymaze-captive-portal.nft
 

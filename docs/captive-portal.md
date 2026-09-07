@@ -13,16 +13,18 @@ own, and the pieces below just make sure whatever they check lands on the game.
    SSID, open, no password.
 2. **dnsmasq** hands out DHCP leases to anyone who joins, and answers *every* DNS query - for any
    domain at all - with the Pi's own address (`192.168.4.1`).
-3. **nftables** redirects all port-80 traffic from the WiFi interface to the game, and rejects
-   port-443 outright.
+3. **nginx** answers *every* request on port 80 with an HTTP 302 redirect straight into the game
+   (on `:8080`) - not the game's page itself. **nftables** rejects port 443 outright.
 4. When a phone joins, its OS pings a specific URL to check for real internet - Apple checks
    `captive.apple.com/hotspot-detect.html`, Android checks
    `connectivitycheck.gstatic.com/generate_204`, Windows checks
    `msftconnecttest.com/connecttest.txt`. Because of steps 2 and 3, that request - whatever domain
-   it was actually for - arrives at the Pi and gets the game's `index.html` back. That's not the
-   "Success"/204/expected-text response the OS wanted, so it concludes there's a portal here and
-   opens its built-in browser pointed at that same URL - which resolves to the Pi again, and shows
-   the game.
+   it was actually for - arrives at the Pi and gets a redirect back instead of the
+   "Success"/204/expected-text response the OS wanted. A redirect is the one signal every major
+   platform reliably treats as "there's a portal here" - more so than serving different content
+   directly with a 200, which some OS versions don't recognize as different enough to act on. The
+   OS opens its built-in browser pointed at that same URL, which resolves to the Pi again and
+   follows the redirect straight into the game.
 5. HTTPS is rejected (TCP RST) rather than redirected, on purpose: there's no way to redirect an
    HTTPS connectivity check without a certificate the phone already trusts. It's a *reject*, not a
    silent drop, so the phone's HTTPS attempt fails immediately instead of hanging for a
@@ -42,8 +44,8 @@ redirects to whatever port the game listens on. Install once:
 sudo scripts/captive-portal/install.sh
 ```
 
-This installs `hostapd`, `dnsmasq`, `nftables`, `scripts/captive-portal/hostapd.conf` and
-`dnsmasq.conf`, and the static-address unit for `wlan0` - but doesn't turn any of it on yet.
+This installs `hostapd`, `dnsmasq`, `nftables`, `nginx`, their respective configs from this
+directory, and the static-address unit for `wlan0` - but doesn't turn any of it on yet.
 
 Turn the hotspot on and off with:
 
@@ -54,8 +56,9 @@ sudo scripts/captive-portal/disable.sh                      # wlan0 goes back to
 
 `LUCKYMAZE_PORT` should match `LuckyMaze__Port` from your `.env` (default `8080`). `enable.sh` tells
 NetworkManager to leave `wlan0` alone, brings up the static address (`192.168.4.1`), starts
-hostapd/dnsmasq, and adds the nftables redirect/drop rules. `disable.sh` reverses all of that and
-lets NetworkManager reconnect `wlan0` to whatever network it already had a saved profile for.
+hostapd/dnsmasq/nginx, and adds the nftables reject rule for HTTPS. `disable.sh` reverses all of
+that and lets NetworkManager reconnect `wlan0` to whatever network it already had a saved profile
+for.
 
 **Enabling drops your connection to whatever `wlan0` was previously on - SSH included, if that's
 how you're connected to the Pi.** One WiFi radio can't be an access point and a client at once.
@@ -91,7 +94,10 @@ the dnsmasq wildcard and the static address both need to agree.
 - **Sees it, connects, but no portal prompt appears**: some phones only show the prompt once, or
   cache "I've seen this network, no portal" per SSID - forget the network on the phone and rejoin.
   Confirm the redirect itself works from another device on the WiFi: `curl -v
-  http://captive.apple.com/hotspot-detect.html` should come back with the game's HTML, not a
-  connection error.
+  http://captive.apple.com/hotspot-detect.html` should come back with a `302` to
+  `http://192.168.4.1:8080/`, not a connection error. Some phones (seen: Samsung/One UI) have a
+  documented OS-level bug where the sign-in browser just doesn't auto-launch even for a portal
+  that's working correctly - if the redirect above checks out, open a browser manually and go to
+  any `http://` address; it'll land on the game the same way.
 - **Connects, portal opens, but the page is blank/errors**: that's the app, not the network layer -
   check `docker compose logs api` on the Pi.
