@@ -12,16 +12,19 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CAPTIVE_PORTAL_DIR="$(cd "$SCRIPT_DIR/../captive-portal" && pwd)"
 REQUEST_DIR="${LUCKYMAZE_HOSTAGENT_DIR:-/home/lucky-user/hostagent/requests}"
+STATE_DIR="${LUCKYMAZE_STATE_DIR:-/home/lucky-user/luckymaze-state}"
 HOTSPOT_REVERT_TIMEOUT_SEC="${LUCKYMAZE_HOTSPOT_TIMEOUT_SEC:-600}"
 REVERT_PID_FILE="/run/luckymaze-hotspot-revert.pid"
 # Unlike the PID file above, this has to survive a reboot - it's how a pending revert resumes
 # after one, instead of a reboot mid-window silently turning a temporary hotspot into a stuck one.
 REVERT_DEADLINE_FILE="/var/lib/luckymaze/hotspot-revert-deadline"
 
-mkdir -p "$REQUEST_DIR" "$(dirname "$REVERT_DEADLINE_FILE")"
+mkdir -p "$REQUEST_DIR" "$STATE_DIR" "$(dirname "$REVERT_DEADLINE_FILE")"
 # World-writable: the API container runs as a non-root user with no shared group with this root
 # service, and the only thing trusted here is the filename (see the comment above), not who wrote it.
-chmod 777 "$REQUEST_DIR"
+# Same reasoning for STATE_DIR - it only ever holds the carriage-at-home marker, an empty file
+# whose mere presence is the signal (see MazeHardwareService), not its content.
+chmod 777 "$REQUEST_DIR" "$STATE_DIR"
 
 cancel_pending_revert() {
   if [ -f "$REVERT_PID_FILE" ]; then
