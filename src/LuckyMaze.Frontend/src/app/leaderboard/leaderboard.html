@@ -47,7 +47,8 @@
                         [name]="i === 0 ? 'lucideTrophy' : 'lucideMedal'"
                         class="mx-auto"
                         [class.text-amber-500]="i === 0"
-                        [class.text-muted-foreground]="i !== 0"
+                        [class.text-slate-400]="i === 1"
+                        [class.text-amber-700]="i === 2"
                       />
                     } @else {
                       <span class="text-sm text-muted-foreground">{{ i + 1 }}</span>
