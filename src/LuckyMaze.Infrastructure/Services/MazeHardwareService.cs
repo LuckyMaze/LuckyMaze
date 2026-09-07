@@ -35,6 +35,7 @@ namespace LuckyMaze.Infrastructure.Services
 
         private readonly string? _picoPortName;
         private readonly string? _klippySocketPath;
+        private readonly string? _homeMarkerPath;
         private readonly IServiceScopeFactory _scopeFactory;
 
         private SerialPort? _serialPort;
@@ -65,6 +66,11 @@ namespace LuckyMaze.Infrastructure.Services
             // with no restart or redeploy.
             _picoPortName = configuration["Hardware:PicoPort"];
             _klippySocketPath = configuration["Hardware:KlippySocketPath"];
+
+            var stateDirectory = configuration["Hardware:StateDirectory"];
+            _homeMarkerPath = string.IsNullOrWhiteSpace(stateDirectory)
+                ? null
+                : Path.Combine(stateDirectory, "carriage-at-home");
 
             InitializeSerialPort();
         }
@@ -222,6 +228,11 @@ namespace LuckyMaze.Infrastructure.Services
         {
             _logger.LogInformation("Initializing physical maze layout.");
 
+            // The carriage is about to move for this round, so whatever "is it still at the true
+            // origin" fact the boot-time marker recorded is no longer current - see
+            // PrepareForShutdownAsync/TryAutoHomeAsync.
+            ClearHomeMarker();
+
             var settings = await GetCalibrationAsync();
 
             var cells = JsonSerializer.Deserialize<List<MazeCell>>(maze.GridData) ?? new();
@@ -237,10 +248,6 @@ namespace LuckyMaze.Infrastructure.Services
                 await SendCommandAsync($"EXIT {ex} {ey} {ew} {eh}");
             }
 
-            // Active homing (G28) needs endstops that aren't configured on this rig, so the
-            // carriage is parked at the physical origin by hand instead. Tell Klipper the current
-            // position IS (0, 0) rather than asking it to home there - no motion, no endstops.
-            await SendGCodeAsync("SET_KINEMATIC_POSITION X=0 Y=0 Z=0");
             await SendGCodeAsync("G90"); // Absolute positioning
 
             // Tunable live from GameSettings rather than baked into printer.cfg, so acceleration
@@ -516,6 +523,83 @@ namespace LuckyMaze.Infrastructure.Services
             // shorter, more consistent distance from wherever a round naturally leaves the ball.
             var (centerX, centerY) = PhysicalMm(PanelSize / 2, PanelSize / 2, settings);
             await SendGCodeAsync($"G1 X{centerX:F1} Y{centerY:F1} F{settings.TravelFeedRateMmPerMin}");
+        }
+
+        public async Task PrepareForShutdownAsync()
+        {
+            _logger.LogInformation("Parking at the true origin before shutdown.");
+
+            var settings = await GetCalibrationAsync();
+
+            await SendCommandAsync("CLEAR");
+
+            // Same reasoning as ResetAsync's center-park: a single long fast traverse from wherever
+            // the carriage happens to be can rip the ball off the magnet. Routing through the
+            // center first keeps each individual leg short, same as a round naturally ends.
+            var (centerX, centerY) = PhysicalMm(PanelSize / 2, PanelSize / 2, settings);
+            await SendGCodeAsync($"G1 X{centerX:F1} Y{centerY:F1} F{settings.TravelFeedRateMmPerMin}");
+
+            // Klipper's own native (0, 0) - the exact spot last hand-parked and declared as home via
+            // EstablishHomeAsync, not PhysicalMm(0, 0, ...): that applies the origin-offset/invert
+            // calibration meant for converting a raster pixel to a physical target, which lands
+            // somewhere else entirely. This has to be the same physical point EstablishHomeAsync's
+            // SET_KINEMATIC_POSITION originally declared, or the marker below would be a lie.
+            await SendGCodeAsync($"G1 X0 Y0 F{settings.TravelFeedRateMmPerMin}");
+
+            WriteHomeMarker();
+        }
+
+        public Task EstablishHomeAsync()
+        {
+            // No motion, no endstops - this rig has none configured (see docs/deployment.md,
+            // "Homing"). This only ever updates Klipper's own bookkeeping of where (0, 0) is,
+            // trusting that the carriage is physically sitting there right now.
+            return SendGCodeAsync("SET_KINEMATIC_POSITION X=0 Y=0 Z=0");
+        }
+
+        public async Task<bool> TryAutoHomeAsync()
+        {
+            if (_homeMarkerPath is null || !File.Exists(_homeMarkerPath))
+            {
+                _logger.LogInformation(
+                    "No carriage-at-home marker found - skipping auto-home. Either this isn't the " +
+                    "first start after a real shutdown, or the last shutdown wasn't clean. Verify " +
+                    "the carriage's position and use the admin panel's \"Set Home\" if needed.");
+                return false;
+            }
+
+            _logger.LogInformation("Carriage-at-home marker found - auto-homing.");
+            await EstablishHomeAsync();
+            ClearHomeMarker();
+            return true;
+        }
+
+        private void WriteHomeMarker()
+        {
+            if (_homeMarkerPath is null) return;
+
+            try
+            {
+                File.WriteAllText(_homeMarkerPath, DateTime.UtcNow.ToString("O"));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to write the carriage-at-home marker at {Path}.", _homeMarkerPath);
+            }
+        }
+
+        private void ClearHomeMarker()
+        {
+            if (_homeMarkerPath is null) return;
+
+            try
+            {
+                File.Delete(_homeMarkerPath);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to clear the carriage-at-home marker at {Path}.", _homeMarkerPath);
+            }
         }
 
         public void Dispose()

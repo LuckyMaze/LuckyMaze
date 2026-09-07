@@ -55,6 +55,18 @@ namespace LuckyMaze.Application.Services
         {
             _logger.LogInformation("GameManager background loop started.");
 
+            try
+            {
+                // Only actually homes if the last shutdown genuinely parked at the true origin (see
+                // MazeHardwareService.PrepareForShutdownAsync) - a no-op after an ordinary redeploy
+                // that didn't go through a real shutdown, so this is always safe to call here.
+                await _hardwareService.TryAutoHomeAsync();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error occurred while checking for an auto-home on startup.");
+            }
+
             while (!stoppingToken.IsCancellationRequested)
             {
                 try

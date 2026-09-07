@@ -30,5 +30,23 @@ namespace LuckyMaze.Infrastructure.Services
             logger.LogInformation("[HARDWARE MOCK] Resetting hardware");
             return Task.CompletedTask;
         }
+
+        public Task PrepareForShutdownAsync()
+        {
+            logger.LogInformation("[HARDWARE MOCK] Parking at true origin before shutdown");
+            return Task.CompletedTask;
+        }
+
+        public Task EstablishHomeAsync()
+        {
+            logger.LogInformation("[HARDWARE MOCK] Declaring current position as home");
+            return Task.CompletedTask;
+        }
+
+        public Task<bool> TryAutoHomeAsync()
+        {
+            logger.LogInformation("[HARDWARE MOCK] No carriage-at-home marker in mock mode - skipping auto-home");
+            return Task.FromResult(false);
+        }
     }
 }
