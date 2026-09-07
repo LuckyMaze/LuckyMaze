@@ -546,6 +546,13 @@ namespace LuckyMaze.Infrastructure.Services
             // SET_KINEMATIC_POSITION originally declared, or the marker below would be a lie.
             await SendGCodeAsync($"G1 X0 Y0 F{settings.TravelFeedRateMmPerMin}");
 
+            // A G1's own reply only confirms Klipper finished *processing* the command - i.e. it
+            // was accepted into the motion queue - not that the toolhead has physically finished
+            // travelling there. M400 blocks until the motion queue is actually flushed. Without
+            // this, the marker below (and the real shutdown right after it) could go out while the
+            // carriage is still mechanically inbound - confirmed on real hardware.
+            await SendGCodeAsync("M400");
+
             WriteHomeMarker();
         }
 
