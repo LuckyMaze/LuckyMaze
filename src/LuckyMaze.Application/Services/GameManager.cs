@@ -248,8 +248,12 @@ namespace LuckyMaze.Application.Services
                     else if (current.X < prev.X) dir = Direction.West;
                 }
 
-                await _hardwareService.ShowStepAsync(current.X, current.Y, dir);
-                await _notificationService.BroadcastAiStepAsync(current.X, current.Y, dir.ToString());
+                // Dispatched together, not sequentially: ShowStepAsync doesn't return until the
+                // carriage physically finishes moving, so awaiting it first before broadcasting
+                // meant the LED panel visibly updated well before the web UI's ball caught up.
+                var hardwareTask = _hardwareService.ShowStepAsync(current.X, current.Y, dir);
+                var broadcastTask = _notificationService.BroadcastAiStepAsync(current.X, current.Y, dir.ToString());
+                await Task.WhenAll(hardwareTask, broadcastTask);
 
                 if (_currentStep == _aiPath.Count - 1)
                 {
