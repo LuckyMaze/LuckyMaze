@@ -3,7 +3,10 @@
 # because the frontend stage below needs src/LuckyMaze.Frontend too.
 
 ARG BUN_VERSION=1.3.13
-FROM oven/bun:${BUN_VERSION} AS frontend-build
+# --platform=$BUILDPLATFORM: this stage's output (plain JS/CSS) isn't architecture-specific, so it
+# only needs to run once, natively, on whatever's actually running the build - not once per target
+# platform under QEMU emulation. Cuts a multi-arch build from minutes to seconds for this stage.
+FROM --platform=$BUILDPLATFORM oven/bun:${BUN_VERSION} AS frontend-build
 WORKDIR /src/frontend
 COPY src/LuckyMaze.Frontend/package.json src/LuckyMaze.Frontend/bun.lock ./
 RUN bun install --frozen-lockfile
@@ -16,7 +19,10 @@ WORKDIR /app
 EXPOSE 8080
 EXPOSE 8081
 
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+# Same reasoning as frontend-build above: this project is framework-dependent (no -r runtime
+# identifier, UseAppHost=false), so the published output is plain portable IL, not
+# architecture-specific - build it once, natively, instead of once per target platform.
+FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 ARG BUILD_CONFIGURATION=Release
 WORKDIR /src
 COPY ["src/LuckyMaze.API/LuckyMaze.API.csproj", "LuckyMaze.API/"]
