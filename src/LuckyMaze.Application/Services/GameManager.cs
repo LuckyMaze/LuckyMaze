@@ -225,10 +225,25 @@ namespace LuckyMaze.Application.Services
             _aiPath = _aiSolver.Solve(_currentMaze, startCoord);
             _currentStep = 0;
 
+            // Discarded on purpose - the tick loop drives state transitions independently and
+            // doesn't wait on this. But an unobserved exception here is silently swallowed by the
+            // runtime and never logged anywhere, so it must catch and log its own failures.
             _ = Task.Run(() => RunSimulationAsync(stoppingToken), stoppingToken);
         }
 
         private async Task RunSimulationAsync(CancellationToken stoppingToken)
+        {
+            try
+            {
+                await RunSimulationCoreAsync(stoppingToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error occurred during the AI simulation run.");
+            }
+        }
+
+        private async Task RunSimulationCoreAsync(CancellationToken stoppingToken)
         {
             _logger.LogInformation("Starting AI simulation run with {Steps} steps.", _aiPath.Count);
 
@@ -291,7 +306,12 @@ namespace LuckyMaze.Application.Services
                 var dbContext = scope.ServiceProvider.GetRequiredService<LuckyMazeDbContext>();
 
                 var dbBets = await dbContext.Bets.Where(b => b.GameId == _currentGameId).ToListAsync();
-                var dbUsers = await dbContext.Users.Where(u => _players.ContainsKey(u.ExternalId)).ToListAsync();
+
+                // EF Core can't translate a lookup against a live ConcurrentDictionary
+                // (ContainsKey) into SQL - materialize the keys into a plain list first, which
+                // translates to a normal parameterized IN/ANY clause.
+                var connectedExternalIds = _players.Keys.ToList();
+                var dbUsers = await dbContext.Users.Where(u => connectedExternalIds.Contains(u.ExternalId)).ToListAsync();
 
                 foreach (var dbBet in dbBets)
                 {
