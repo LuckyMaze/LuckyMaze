@@ -11,6 +11,15 @@ import {
 import { MazeCell } from '../api/model/mazeCell';
 import { MazeExit } from '../api/model/mazeExit';
 
+// Matches the physical LED panel's own hardcoded palette (LuckyMaze/LEDController's code.py) at
+// full saturation - the panel dims these by its BRIGHTNESS factor for LED power/eye-comfort
+// reasons that don't apply to a screen, so this uses the same hues undimmed rather than
+// reproducing that muddier on-panel brightness.
+const FLOOR_COLOR = '#000000';
+const WALL_COLOR = '#1030c0';
+const AI_COLOR = '#ffff00';
+const EXIT_COLOR = '#00ff00';
+
 @Component({
   selector: 'luckymaze-maze-renderer',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -95,7 +104,11 @@ export class MazeRenderer implements AfterViewInit, OnDestroy {
     const drawWidth = canvas.width / dpr;
     const drawHeight = canvas.height / dpr;
 
-    this.ctx.clearRect(0, 0, drawWidth, drawHeight);
+    // Solid black floor, same as the physical panel - unlit LEDs, not whatever the page's own
+    // light/dark theme background happens to be. The maze mirrors the panel's fixed palette
+    // regardless of site theme, since that's the panel's own hardware reality either way.
+    this.ctx.fillStyle = FLOOR_COLOR;
+    this.ctx.fillRect(0, 0, drawWidth, drawHeight);
 
     const cellWidth = drawWidth / width;
     const cellHeight = drawHeight / height;
@@ -109,9 +122,9 @@ export class MazeRenderer implements AfterViewInit, OnDestroy {
     const wallWidth = Math.max(0.75, Math.min(3, cellSize * 0.22));
 
     if (showFloorGrid) {
-      this.ctx.strokeStyle = theme.foreground;
+      this.ctx.strokeStyle = WALL_COLOR;
       this.ctx.lineWidth = 1;
-      this.ctx.globalAlpha = 0.1;
+      this.ctx.globalAlpha = 0.2;
       for (let x = 0; x <= width; x++) {
         this.ctx.beginPath();
         this.ctx.moveTo(x * cellWidth, 0);
@@ -128,7 +141,7 @@ export class MazeRenderer implements AfterViewInit, OnDestroy {
     }
 
     // Walls
-    this.ctx.strokeStyle = theme.foreground;
+    this.ctx.strokeStyle = WALL_COLOR;
     this.ctx.lineWidth = wallWidth;
     this.ctx.lineCap = wallWidth >= 1.5 ? 'round' : 'butt';
     for (const cell of grid) {
@@ -161,7 +174,7 @@ export class MazeRenderer implements AfterViewInit, OnDestroy {
         const cx = (exit.x + 0.5) * cellWidth;
         const cy = (exit.y + 0.5) * cellHeight;
 
-        this.ctx.fillStyle = theme.foreground;
+        this.ctx.fillStyle = EXIT_COLOR;
         this.ctx.beginPath();
         this.ctx.arc(cx, cy, radius, 0, Math.PI * 2);
         this.ctx.fill();
@@ -169,14 +182,13 @@ export class MazeRenderer implements AfterViewInit, OnDestroy {
         if (showLabel) {
           // "Exit A" -> "A" - the letter is what needs to fit in the marker, not the full name.
           const label = exit.name.trim().split(/\s+/).pop() ?? exit.name;
-          this.ctx.fillStyle = theme.background;
+          this.ctx.fillStyle = FLOOR_COLOR;
           this.ctx.fillText(label, cx, cy);
         }
       }
     }
 
-    // AI agent (eased toward target) - the one accent color this theme has, for the one thing
-    // that's actually moving.
+    // AI agent (eased toward target) - matches the panel's own yellow dot.
     if (this.currentAiX !== null && this.currentAiY !== null && this.targetAiX !== null && this.targetAiY !== null) {
       this.currentAiX += (this.targetAiX - this.currentAiX) * this.lerpSpeed;
       this.currentAiY += (this.targetAiY - this.currentAiY) * this.lerpSpeed;
@@ -185,25 +197,21 @@ export class MazeRenderer implements AfterViewInit, OnDestroy {
       const y = (this.currentAiY + 0.5) * cellHeight;
       const radius = Math.min(cellWidth, cellHeight) * 0.22;
 
-      this.ctx.fillStyle = theme.destructive;
+      this.ctx.fillStyle = AI_COLOR;
       this.ctx.beginPath();
       this.ctx.arc(x, y, radius, 0, Math.PI * 2);
       this.ctx.fill();
     }
   }
 
-  /** Canvas can't see Tailwind classes, so read the same CSS custom properties the rest of the
-   * app's theme (light/dark/system) is built from, straight off the root element. */
-  private readTheme(): { foreground: string; background: string; destructive: string; fontSans: string } {
+  /** The maze's own colors match the physical panel's fixed palette regardless of site theme (see
+   * the *_COLOR constants above) - only the label font still follows the page's own theme, since
+   * canvas can't see Tailwind classes and has to read it as a CSS custom property instead. */
+  private readTheme(): { fontSans: string } {
     const styles = getComputedStyle(document.documentElement);
     const read = (name: string, fallback: string) => styles.getPropertyValue(name).trim() || fallback;
 
-    return {
-      foreground: read('--foreground', '#000'),
-      background: read('--background', '#fff'),
-      destructive: read('--destructive', '#ef4444'),
-      fontSans: read('--font-sans', 'sans-serif'),
-    };
+    return { fontSans: read('--font-sans', 'sans-serif') };
   }
 
   private line(x1: number, y1: number, x2: number, y2: number): void {
